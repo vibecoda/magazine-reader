@@ -1,48 +1,108 @@
 #!/usr/bin/env node
-/** Register a separate native host; never modifies Kotoba's installation. */
+/**
+ * Sets up Magazine Reader on this Mac:
+ *   node host/install.mjs              build bin/ocr if needed and register the Chrome native host
+ *   node host/install.mjs --set-key    store a DeepSeek API key (prompted, or piped on stdin)
+ *   node host/install.mjs --remove-key delete the stored key
+ *   node host/install.mjs --check      report what is installed
+ */
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { createInterface } from "node:readline";
 import { parseArgs } from "node:util";
-import { deepseekKey } from "./deepseek.mjs";
-import { CHROME_DIR, DATA_DIR, extensionId, HOST_NAME, ROOT } from "./paths.mjs";
+import { deepseekKeySource } from "./deepseek.mjs";
+import { CHROME_DIR, DATA_DIR, extensionId, HOST_NAME, LEGACY_HOST_NAMES, OCR_BINARY, OCR_SOURCE, ROOT } from "./paths.mjs";
 
 const { values } = parseArgs({ options: {
-  check: { type: "boolean" }, ocr: { type: "string" },
+  check: { type: "boolean" }, "set-key": { type: "boolean" }, "remove-key": { type: "boolean" },
+  ocr: { type: "string" }, "skip-key-prompt": { type: "boolean" },
   "data-dir": { type: "string", default: DATA_DIR }, "hosts-dir": { type: "string", default: CHROME_DIR },
 } });
 const dataDir = resolve(values["data-dir"]), hostsDir = resolve(values["hosts-dir"]);
+const keyFile = join(dataDir, "deepseek-api-key");
 const launcher = join(dataDir, "magazine-reader-host");
 const manifestPath = join(hostsDir, `${HOST_NAME}.json`);
 const id = extensionId();
+
+/** Reads a line without echoing it when typed at a terminal; reads all of stdin when piped. */
+async function readSecret(prompt) {
+  if (!process.stdin.isTTY) {
+    let text = "";
+    for await (const chunk of process.stdin) text += chunk;
+    return text.trim();
+  }
+  const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: true });
+  process.stdout.write(prompt);
+  rl._writeToOutput = () => {}; // keep the key off the screen
+  const answer = await new Promise(resolve => rl.question("", resolve));
+  rl.close(); process.stdout.write("\n");
+  return answer.trim();
+}
+
+function saveKey(key) {
+  if (/\s/.test(key) || key.length > 500) throw new Error("That does not look like an API key; nothing was saved.");
+  mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+  writeFileSync(keyFile, key + "\n", { mode: 0o600 });
+  chmodSync(keyFile, 0o600);
+  console.log(`Saved the DeepSeek key to ${keyFile} (readable only by you).`);
+}
+
+function buildOcr() {
+  if (existsSync(OCR_BINARY) && statSync(OCR_BINARY).mtimeMs >= statSync(OCR_SOURCE).mtimeMs) return OCR_BINARY;
+  console.log("Building the OCR helper (bin/ocr) with swiftc…");
+  mkdirSync(join(ROOT, "bin"), { recursive: true });
+  try {
+    execFileSync("/usr/bin/xcrun", ["swiftc", "-O", OCR_SOURCE, "-o", OCR_BINARY, "-framework", "VisionKit", "-framework", "AppKit"],
+      { stdio: ["ignore", "inherit", "inherit"] });
+  } catch {
+    throw new Error("Could not build bin/ocr. Install the Xcode Command Line Tools (xcode-select --install), then re-run.");
+  }
+  return OCR_BINARY;
+}
+
 if (values.check) {
+  const key = deepseekKeySource({ keyFile });
   console.log(`Extension ID: ${id}`);
-  console.log(`Native host: ${existsSync(manifestPath) ? manifestPath : "not installed"}`);
+  console.log(`Native host: ${existsSync(manifestPath) ? manifestPath : "not installed (run node host/install.mjs)"}`);
   console.log(`Launcher: ${existsSync(launcher) ? launcher : "not installed"}`);
-  console.log(`DeepSeek key: ${deepseekKey() ? "available" : "missing (environment or ~/.env2)"}`);
+  console.log(`DeepSeek key: ${key ? `found (${key.source})` : "missing (run node host/install.mjs --set-key)"}`);
   if (existsSync(launcher)) {
     const match = readFileSync(launcher, "utf8").match(/^MAGAZINE_OCR_BINARY='([^']+)'$/m);
-    console.log(`OCR: ${match && existsSync(match[1]) ? match[1] : "check launcher OCR path"}`);
+    console.log(`OCR: ${match && existsSync(match[1]) ? match[1] : "missing (re-run node host/install.mjs)"}`);
   }
-  process.exit(0);
+} else if (values["remove-key"]) {
+  rmSync(keyFile, { force: true });
+  console.log(`Removed ${keyFile}.`);
+} else if (values["set-key"]) {
+  const key = await readSecret("DeepSeek API key (from https://platform.deepseek.com/api_keys): ");
+  if (!key) throw new Error("No key entered; nothing was saved.");
+  saveKey(key);
+} else {
+  if (process.platform !== "darwin") throw new Error("Magazine Reader uses macOS Live Text for OCR and requires macOS 13 or newer.");
+  if (Number(process.versions.node.split(".")[0]) < 22) throw new Error("Use Node 22 or newer.");
+  const ocr = values.ocr ? resolve(values.ocr) : buildOcr();
+  if (!existsSync(ocr)) throw new Error(`OCR binary not found at ${ocr}.`);
+  const quote = text => `'${text.replaceAll("'", "'\\''")}'`;
+  mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+  mkdirSync(hostsDir, { recursive: true });
+  writeFileSync(launcher, ["#!/bin/sh", `MAGAZINE_OCR_BINARY=${quote(ocr)}`, "export MAGAZINE_OCR_BINARY",
+    `exec ${quote(process.execPath)} ${quote(join(ROOT, "host", "host.mjs"))} "$@"`, ""].join("\n"), { mode: 0o700 });
+  chmodSync(launcher, 0o700);
+  writeFileSync(manifestPath, JSON.stringify({ name: HOST_NAME, description: "Magazine OCR and English summary",
+    path: launcher, type: "stdio", allowed_origins: [`chrome-extension://${id}/`] }, null, 2) + "\n", { mode: 0o600 });
+  chmodSync(manifestPath, 0o600);
+  // Earlier versions registered under another name; remove only that file.
+  for (const name of LEGACY_HOST_NAMES) rmSync(join(hostsDir, `${name}.json`), { force: true });
+  console.log(`Installed ${HOST_NAME} for extension ${id}.`);
+  if (!deepseekKeySource({ keyFile })) {
+    if (process.stdin.isTTY && !values["skip-key-prompt"]) {
+      console.log("\nSummaries need a DeepSeek API key (https://platform.deepseek.com/api_keys).");
+      const key = await readSecret("Paste it now, or press Enter to skip: ");
+      if (key) saveKey(key);
+      else console.log("Skipped. Run node host/install.mjs --set-key before summarizing.");
+    } else console.log("No DeepSeek key yet: run node host/install.mjs --set-key before summarizing.");
+  }
+  console.log(`\nNext: open chrome://extensions, turn on Developer mode, click Load unpacked, and choose:\n  ${join(ROOT, "chrome")}`);
+  console.log("Re-run this installer after upgrading Node or moving the repository.");
 }
-if (process.platform !== "darwin") throw new Error("The bundled OCR and installer require macOS.");
-if (Number(process.versions.node.split(".")[0]) < 22) throw new Error("Use Node 22 or newer.");
-let ocr = values.ocr;
-if (!ocr) {
-  try { ocr = execFileSync("/usr/bin/which", ["ocr"], { encoding: "utf8" }).trim(); } catch { /* checked below */ }
-}
-if (!ocr || !existsSync(resolve(ocr))) throw new Error("OCR not found. Pass --ocr /absolute/path/to/ocr.");
-ocr = resolve(ocr);
-const quote = text => `'${text.replaceAll("'", "'\\''")}'`;
-mkdirSync(dataDir, { recursive: true, mode: 0o700 });
-mkdirSync(hostsDir, { recursive: true });
-writeFileSync(launcher, ["#!/bin/sh", `MAGAZINE_OCR_BINARY=${quote(ocr)}`, "export MAGAZINE_OCR_BINARY",
-  `exec ${quote(process.execPath)} ${quote(join(ROOT, "host", "host.mjs"))} "$@"`, ""].join("\n"), { mode: 0o700 });
-chmodSync(launcher, 0o700);
-writeFileSync(manifestPath, JSON.stringify({ name: HOST_NAME, description: "Magazine OCR and English summary",
-  path: launcher, type: "stdio", allowed_origins: [`chrome-extension://${id}/`] }, null, 2) + "\n", { mode: 0o600 });
-chmodSync(manifestPath, 0o600);
-console.log(`Installed ${HOST_NAME} for extension ${id}.`);
-console.log(`Load unpacked: ${join(ROOT, "chrome")}`);
-console.log("Re-run this installer after upgrading Node or moving the repo/OCR binary.");

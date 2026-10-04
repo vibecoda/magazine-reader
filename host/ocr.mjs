@@ -1,8 +1,9 @@
 import { execFile } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cleanText } from "./deepseek.mjs";
+import { OCR_BINARY } from "./paths.mjs";
 
 export function decodeImage(dataUrl) {
   if (typeof dataUrl !== "string" || dataUrl.length > 28 * 1024 * 1024) throw new Error("Screenshot is too large.");
@@ -17,7 +18,7 @@ export function decodeImage(dataUrl) {
   return image;
 }
 
-export async function recognize(dataUrl, { command = process.env.MAGAZINE_OCR_BINARY || join(homedir(), ".local", "bin", "ocr"), signal } = {}) {
+export async function recognize(dataUrl, { command = process.env.MAGAZINE_OCR_BINARY || OCR_BINARY, signal } = {}) {
   const image = decodeImage(dataUrl);
   const directory = await mkdtemp(join(tmpdir(), "magazine-reader-"));
   try {
@@ -27,7 +28,7 @@ export async function recognize(dataUrl, { command = process.env.MAGAZINE_OCR_BI
       execFile(command, [path], { encoding: "utf8", timeout: 60_000, maxBuffer: 512 * 1024, signal }, (error, stdout) => {
         if (error) {
           reject(new Error(signal?.aborted ? "Cancelled." : error.code === "ENOENT"
-            ? "OCR binary not found. Run host/install.mjs with --ocr pointing to your ocr binary."
+            ? "OCR binary not found. Run node host/install.mjs to build it."
             : error.killed ? "OCR did not finish within 60 seconds." : "OCR failed. Try a clearer region or test the ocr binary directly."));
         } else resolve(stdout);
       });

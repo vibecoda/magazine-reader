@@ -1,7 +1,8 @@
-/** Follows anki/extension/host/draft-deepseek.mjs, without its card dependencies. */
+/** DeepSeek chat completions over fetch: no SDK or npm dependencies. */
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { KEY_FILE } from "./paths.mjs";
 
 export const MODEL = "deepseek-flash";
 export const ENDPOINT = "https://api.deepseek.com/chat/completions";
@@ -48,8 +49,23 @@ Finish with a brief limitations note only if the excerpt is incomplete or unclea
 Put this note in a separate final paragraph starting with "Limitations:".`;
 }
 
-export function deepseekKey({ env = process.env, envPath = join(homedir(), ".env2") } = {}) {
-  if (env.DEEPSEEK_API_KEY?.trim()) return env.DEEPSEEK_API_KEY.trim();
+/**
+ * Key lookup, first match wins: DEEPSEEK_API_KEY in the host's environment, the key file written by
+ * `node host/install.mjs --set-key`, then a DEEPSEEK_API_KEY= line in ~/.env2 (read, never executed).
+ */
+export function deepseekKey(options = {}) { return deepseekKeySource(options)?.key ?? null; }
+
+export function deepseekKeySource({ env = process.env, keyFile = KEY_FILE, envPath = join(homedir(), ".env2") } = {}) {
+  if (env.DEEPSEEK_API_KEY?.trim()) return { key: env.DEEPSEEK_API_KEY.trim(), source: "DEEPSEEK_API_KEY environment variable" };
+  if (existsSync(keyFile)) {
+    const key = readFileSync(keyFile, "utf8").trim();
+    if (key) return { key, source: keyFile };
+  }
+  const key = envFileKey(envPath);
+  return key ? { key, source: envPath } : null;
+}
+
+function envFileKey(envPath) {
   if (!existsSync(envPath)) return null;
   const line = readFileSync(envPath, "utf8").split(/\r?\n/)
     .find(l => /^\s*(?:export\s+)?DEEPSEEK_API_KEY\s*=/.test(l));
@@ -67,7 +83,7 @@ export function cleanText(value) {
 
 /** One chat completion; shared by summaries and questions. Never relays provider error bodies. */
 async function complete(messages, { tokens, seconds, what, fetchImpl, key, signal }) {
-  if (!key) throw new Error("Set DEEPSEEK_API_KEY in ~/.env2, as for Kotoba Reader, then try again.");
+  if (!key) throw new Error("No DeepSeek API key. Run: node host/install.mjs --set-key");
   const started = Date.now();
   let response;
   try {

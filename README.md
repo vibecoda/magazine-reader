@@ -1,55 +1,97 @@
-# Magazine Reader · 0.5.1
+<img src="chrome/icons/icon-128.png" width="72" alt="" align="right">
 
-A small Chrome extension for the Rakuten Magazine web reader. Click the extension,
-select a region of the visible spread, and read an English summary in an overlay.
-It follows the native messaging / direct DeepSeek design in
-the sibling `anki` repo's `extension/`, with **no npm dependencies, aichat, or LLM SDK**.
+# Magazine Reader
+
+A Chrome extension for reading Japanese magazines on the
+[Rakuten Magazine](https://magazine.rakuten.co.jp/) web reader in English.
+Select part of a page, and it recognizes the Japanese text **locally** with macOS
+Live Text, then uses DeepSeek to summarize, translate, list the stocks mentioned,
+or answer your questions — in a reader overlay on top of the magazine.
 
 ```
-extension button → visible-tab PNG → region selection → native host
-                                                      ├─ local VisionKit ocr
-                                                      └─ DeepSeek text summary → overlay
+toolbar button → screenshot of the visible page → you select a region
+              → native host on your Mac ─┬─ OCR with macOS Live Text (stays on your Mac)
+                                         └─ DeepSeek API (text only) → reader overlay
 ```
 
-## Setup on this Mac
+There are no npm dependencies, build steps for the extension, or LLM SDKs:
+plain JavaScript in Chrome, a small Node.js native-messaging host, and a 40-line
+Swift OCR helper that the installer compiles for you.
 
-Requires Node 22+ and the existing `ocr` binary built from `dot_home/utils/japanese_ocr/ocr.swift`.
-The key lookup matches Kotoba Reader: `DEEPSEEK_API_KEY` from the host's environment,
-then `~/.env2`. The native host reads that file without executing it. No key is
-copied into the extension or repository. The current shell's exported variables
-are not automatically inherited by Chrome: use `~/.env2` for that setup.
+## Requirements
 
-From this repository (`~/dev/gitlab/magazine-reader`):
+- **macOS 13 (Ventura) or newer** — OCR uses the built-in Live Text engine.
+- **Xcode Command Line Tools** for `swiftc`: `xcode-select --install`
+  (skip if `xcrun swiftc --version` already works).
+- **Node.js 22 or newer** (`node --version`).
+- **Google Chrome 116 or newer**.
+- A **DeepSeek API key** from <https://platform.deepseek.com/api_keys>.
+  Normal DeepSeek API billing applies; OCR-only use needs no key.
+- A Rakuten Magazine subscription — the extension only runs on
+  `https://magazine.rakuten.co.jp/read/…` pages.
+
+## Install
+
+```bash
+git clone git@github.com:vibecoda/magazine-reader.git
+cd magazine-reader
+node host/install.mjs
+```
+
+The installer:
+
+1. builds the OCR helper into `bin/ocr` (from `ocr/ocr.swift`),
+2. registers the native messaging host `io.github.vibecoda.magazine_reader` with
+   Chrome, allowed to talk **only** to this extension, and
+3. asks for your DeepSeek API key (input is hidden; press Enter to skip).
+
+Then load the extension:
+
+1. Open `chrome://extensions` and turn on **Developer mode** (top right).
+2. Click **Load unpacked** and choose this repository's **`chrome/`** folder.
+3. Optionally pin **Magazine Reader** from the puzzle-piece menu.
+
+The extension ID is always `bchilcmoklaelegfndjimjmibgkddehd` (pinned by the public
+key in `chrome/manifest.json`), which is what the native host trusts.
+
+Check the setup at any time:
 
 ```bash
 node host/install.mjs --check
-node host/install.mjs
-# If ocr is not on PATH:
-# node host/install.mjs --ocr "$HOME/.local/bin/ocr"
 ```
 
-In Chrome, open `chrome://extensions`, enable Developer mode, and **Load unpacked**
-from this repository's `chrome/` folder. The public manifest key pins the extension ID
-to `bchilcmoklaelegfndjimjmibgkddehd`. Pin its toolbar button if desired.
-The installer registers `com.dot_home.magazine_reader` (a name kept from when this
-lived in dot_home) for only that extension;
-it does not change Kotoba Reader. Re-run it after moving the repository or
-upgrading Node / relocating the OCR executable, and reload the extension after
-editing its JavaScript.
+### DeepSeek API key
 
-## Reading
+```bash
+node host/install.mjs --set-key             # prompt (hidden input)
+pbpaste | node host/install.mjs --set-key   # or pipe it in, e.g. from the clipboard
+node host/install.mjs --remove-key
+```
+
+The key is stored in `~/Library/Application Support/Magazine Reader/deepseek-api-key`
+with owner-only permissions and is read by the native host for each request, so
+changes apply without reloading anything. It is never copied into the extension
+or this repository.
+
+The host looks for a key in this order and uses the first it finds:
+
+1. `DEEPSEEK_API_KEY` in the host's environment (Chrome-launched hosts usually
+   don't inherit your shell's variables, so this is mainly for command-line tests),
+2. the key file above,
+3. a `DEEPSEEK_API_KEY=…` line in `~/.env2` (read as text, never executed).
+
+## Using it
 
 1. Open a magazine at `https://magazine.rakuten.co.jp/read/…` and zoom until the
-   text is readable. Exit the reader's fullscreen mode before capturing.
-2. Click **Magazine Reader**. The overlay shows a frozen screenshot of the spread.
-   Controls sit in a narrow bar at the right edge, leaving the center clear.
-   **Move to left/right** switches that bar's side. Pick a **Summary style** there.
-3. Drag around a page, article, or text column. **Whole viewport** selects everything
-   visible; this also includes reader controls and margins.
-4. **Summarize selection** performs OCR locally, then sends the transcript to DeepSeek.
-   **OCR only** stops after recognition and sends nothing to DeepSeek.
-5. Results open in a **centered reader** over a dimmed page, with a loading
-   placeholder while OCR and DeepSeek run. Tabs across the top switch style:
+   text is comfortably readable. Exit the reader's fullscreen mode first.
+2. Click the **Magazine Reader** toolbar button. The page freezes into a screenshot
+   with a control bar at the side (**Move to left/right** switches sides). Choose a
+   **Summary style** there.
+3. Drag a rectangle around a page, article, or text column, or click **Whole viewport**.
+4. **Summarize selection** runs OCR on your Mac and sends only the recognized text to
+   DeepSeek. **OCR only** stops after recognition and sends nothing anywhere.
+5. The result opens in a reader over the dimmed page. Tabs across the top switch
+   between output styles:
 
    | Tab | Output |
    |---|---|
@@ -60,95 +102,123 @@ editing its JavaScript.
    | Translation | A full English translation rather than a summary |
    | Vocabulary | The gist plus 8–15 Japanese words with readings and meanings |
    | Stocks | Each company named, with its Tokyo securities code linked to Monex |
+   | Ask | A conversation: ask DeepSeek anything about the page |
 
-   In **Stocks**, click a code to open `monex.ifis.co.jp/index.php?sa=find&ta=n&wd=<code>`
-   in a new tab. Codes the model supplied itself, rather than found in the article,
-   carry a **verify code** badge; uncertain or unlisted companies get no link.
+   A tab you haven't generated yet sends the same text again in that style; results
+   are kept for the capture (marked with a dot) and switch instantly.
+   **Regenerate** asks for a fresh version.
+6. To turn the page, click **New capture**. The overlay shrinks to a small bar so you
+   can use the magazine normally; click **Capture page** when you're on the page you
+   want, or **Back** to return to the last result.
 
-   The last tab, **Ask**, is a conversation about the page. Type any question (or
-   pick a suggestion) and press Enter; Shift+Enter adds a line. DeepSeek receives
-   the page's Japanese text plus up to 8 earlier questions and answers, and is told
-   to answer from the article and to label any outside background knowledge.
-   Edits to the Japanese text apply to the next question. **Copy** copies the whole
-   conversation and **Clear conversation** starts over; a new capture also clears it.
+**Stocks** — click a code to open its page on Monex's IFIS company data
+(`monex.ifis.co.jp/index.php?sa=find&ta=n&wd=<code>`) in a new tab; it may ask you
+to log in to Monex. Codes printed in the article are linked directly; codes the
+model supplied from its own knowledge carry a **verify code** badge, and companies
+it isn't sure about get no link.
 
-   Choosing a tab you haven't generated yet sends the same OCR text again in that
-   style; generated styles are kept for the capture (marked with a dot) and switch
-   instantly. **Regenerate** asks for a fresh version of the current style.
-6. **Aa** opens reading settings: typeface (serif, sans, humanist, mono), text size,
-   line spacing, width, theme (paper, sepia, night), position (centered, or docked
-   left/right so the magazine stays usable), and ragged or justified alignment.
-   Settings and the last style are remembered in `chrome.storage.local`.
-   Keys while the reader has focus: `+` / `-` text size, `1`–`8` tab, Escape
-   closes settings, then the reader. A thin bar under the header shows reading progress.
-   Review or edit **Japanese text**, then **Summarize** / **Regenerate** to retry with
-   corrections. **Copy** copies the title and main text without its final
-   limitations or disclaimer note. The full output remains visible and saved.
-7. Click **New capture** (in the reader or the selection bar). The overlay steps
-   aside to a small bar so you can turn the magazine page with its normal controls
-   and keys. Click **Capture page** when ready: this hides the bar, takes a fresh
-   screenshot, and opens region selection. **Back** returns to the last result.
-   Any running request is cancelled. It also works when the previous capture has
-   expired, and the saved files remain on disk.
+**Ask** — type a question (or pick a suggestion) and press Enter; Shift+Enter adds a
+line. DeepSeek gets the page's Japanese text and up to 8 earlier questions and
+answers, and is told to answer from the article and clearly label any outside
+background knowledge. **Copy** copies the conversation; **Clear conversation**
+starts over.
 
-After changing extension code, reload it at `chrome://extensions` and refresh the
-Rakuten reader tab so the updated overlay is injected.
+**Reading settings** — the **Aa** button: typeface (serif, sans, humanist, mono),
+text size, line spacing, width, theme (paper, sepia, night), position (centered, or
+docked left/right so the magazine stays usable), and ragged or justified text.
+Settings are remembered.
 
-The preview thumbnail and capture time identify the snapshot the summary describes.
-Turning a reader page does not turn the old summary into a summary of the new page:
-use **New capture** or click the extension again. OCR output stays available if DeepSeek
-fails. Closing/cancelling disconnects the native host and aborts its pending work.
+**Keyboard** (while the reader has focus) — `+` / `-` text size, `1`–`8` switch tabs,
+Escape closes settings, then the reader.
 
-## Data and permissions
+**Fixing OCR** — open **Japanese text · review or edit** to correct the recognized
+text, then **Summarize** / **Regenerate** (or ask again). **Copy** copies a summary
+without its final "limitations" note.
 
-Every OCR / summary request is archived automatically under
-`data/YYYY-MM-DD/<time>-<unique-id>/` in this repository (UTC dates):
+## Your data
 
-- `ocr.txt`: recognized Japanese text, or the edited transcript submitted for a retry.
-- `summary.md`: English summary, or for **Ask** the question and answer, when the LLM call succeeds.
-- `metadata.json`: request ID, capture URL/time/ID, save time, summary style (`ask` for questions), and model/status.
+Every request is saved automatically in this repository's `data/` folder
+(git-ignored), one folder per request: `data/YYYY-MM-DD/<time>-<id>/` (UTC dates).
 
-OCR is written **before** calling DeepSeek, so a failed or cancelled summary still
-leaves the transcript on disk. Each retry creates a new folder and preserves the
-earlier version; matching capture IDs link them. The panel confirms saving and
-shows the folder path when you hover over the confirmation. Archive folders/files
-are created with owner-only permissions, and this directory is Git-ignored.
-Screenshots are not archived. If local saving fails, the panel reports the error.
+- `ocr.txt` — the Japanese text that was used, including your edits.
+- `summary.md` — the English output; for **Ask**, the question and answer.
+- `metadata.json` — page URL, capture time and ID, output style (`ask` for
+  questions), model, and whether the output was cut off.
 
-- `activeTab` and `scripting`: capture and inject the overlay after you click.
-  The worker permits only Rakuten's `/read/` pages. There are no persistent host
-  permissions or automatically running content scripts.
-- `nativeMessaging`: connect to this Mac's OCR / summary host. No localhost web
-  service, remote debugging, or browser cookies are needed.
-- `storage`: short-lived capture metadata in Chrome's session storage so region
-  selection survives service-worker suspension, plus reading settings in local
-  storage. Images and text are not stored there.
+The text is saved **before** DeepSeek is called, so it survives failed or cancelled
+requests. Retries and other styles get their own folders; the shared capture ID in
+`metadata.json` groups them. Screenshots are never saved.
 
-The host uses a private temporary PNG and deletes it after OCR, including on errors.
-The screenshot never goes to DeepSeek. Only the transcript goes to
-`https://api.deepseek.com/chat/completions`, using `deepseek-flash` with thinking
-disabled. Each style has its own output budget; Detailed and Translation allow
-longer answers and wait up to 90 seconds. Normal DeepSeek API billing applies.
-There is no automatic provider fallback, automatic retry, or logging of keys / article text. In-memory images and
-text are released when the reader tab is unloaded; saved archives remain on disk.
-Use within the permissions granted by your content provider.
+**What leaves your Mac:** only the recognized text (plus your questions) goes to
+`https://api.deepseek.com/chat/completions`, using the `deepseek-flash` model with
+thinking disabled. Screenshots and images stay local; the OCR helper works on a
+private temporary file that is deleted afterwards. Keys and article text are never
+logged, and provider error bodies are never shown.
+
+**Chrome permissions:**
+- `activeTab` + `scripting` — take the screenshot and show the overlay only after you
+  click the button, and only on Rakuten's `/read/` pages. No content scripts run
+  automatically and there are no site-wide host permissions.
+- `nativeMessaging` — talk to the local host. No web server or open port is involved.
+- `storage` — short-lived capture details (so selection survives Chrome suspending
+  the background worker) and your reading settings. No images or text.
+
+Use within the terms of your magazine subscription.
 
 ## Limits
 
-This first version captures **the visible region**, not a whole magazine or a
-scrolling page. It reuses the existing VisionKit transcript rather than reconstructing
-article reading order. Dense vertical columns, small print, tables, and mixed
-sidebars may need separate crops or text corrections. The LLM prompt flags unclear
-OCR and incomplete excerpts; it cannot restore missing content reliably.
+- It reads **what is visible** in the tab, not a whole issue or scrolling page.
+- OCR is macOS Live Text's transcript; dense vertical columns, tiny print, tables and
+  mixed sidebars may need smaller selections or manual fixes in the Japanese text.
+- Summaries can only cover the selected text and flag unclear or incomplete excerpts;
+  they can't recover missing content. Very long selections can hit output limits —
+  the reader tells you when that happens.
 
-Summary output is bounded, timeouts are explicit, and the native protocol caps
-input/output sizes. Provider errors never relay raw API response bodies. Displayed
-OCR and summary text are rendered as text inside a closed shadow root, not HTML.
+## Troubleshooting
 
-## Icon
+| Message or symptom | Fix |
+|---|---|
+| "Install the Magazine Reader native host…" | Run `node host/install.mjs`, then reload the extension. |
+| "No DeepSeek API key…" | `node host/install.mjs --set-key` |
+| "DeepSeek rejected the API key" / "no balance left" | Check the key and balance at platform.deepseek.com. |
+| "Could not build bin/ocr" | `xcode-select --install`, then re-run the installer. |
+| "No readable text" | Zoom the magazine in and select a tighter region. |
+| "Open a Rakuten Magazine reader tab…" | The extension only works on `magazine.rakuten.co.jp/read/…`. |
+| "Exit reader fullscreen…" | Leave the magazine's fullscreen mode, then click again. |
+| Nothing happens after moving the repo or upgrading Node | Re-run `node host/install.mjs`. |
 
-`chrome/icons/icon.svg` is the source for the 32/48/128 px PNGs; `icon-16.svg` is a
-simplified toolbar version (magazine and two crop corners). After editing, re-render:
+`node host/install.mjs --check` shows what's installed and where the key was found.
+To test OCR (and optionally DeepSeek) without Chrome:
+
+```bash
+node host/check-image.mjs /path/to/page.png             # OCR only
+node host/check-image.mjs /path/to/page.png --summarize  # also calls DeepSeek
+```
+
+## Development
+
+```
+chrome/   the extension: background worker, overlay (content.js), summary parser, icons
+host/     native messaging host (Node.js): OCR, DeepSeek, archive, installer
+ocr/      Swift source of the OCR helper (built to bin/ocr)
+tests/    node:test suites and a browser UI fixture
+```
+
+```bash
+node --test tests/*.test.mjs
+node --check chrome/content.js && node --check chrome/background.js
+```
+
+`tests/preview.html` exercises the overlay with synthetic Japanese text and mocked
+Chrome / DeepSeek responses — no extension install or API calls. Serve the
+repository root (e.g. `python3 -m http.server 8765`) and open
+`http://localhost:8765/tests/preview.html`.
+
+After changing extension code, reload it at `chrome://extensions` and refresh the
+magazine tab. Host changes apply on the next request.
+
+The icon's sources are `chrome/icons/icon.svg` (32/48/128 px) and the simplified
+`icon-16.svg`; re-render the PNGs with `rsvg-convert` (`brew install librsvg`):
 
 ```bash
 cd chrome/icons
@@ -156,22 +226,9 @@ for n in 32 48 128; do rsvg-convert -w $n -h $n icon.svg -o icon-$n.png; done
 rsvg-convert -w 16 -h 16 icon-16.svg -o icon-16.png
 ```
 
-## Checks
+## Uninstall
 
-```bash
-node --test tests/*.test.mjs
-node --check chrome/content.js
-node --check chrome/background.js
-node host/check-image.mjs /path/to/small-test.png
-# Include --summarize to also send the recognized text to DeepSeek.
-```
-
-`tests/preview.html` is a standalone UI fixture with synthetic Japanese text and
-mocked Chrome / DeepSeek responses. It is not loaded by the extension. Serve this
-directory locally and open `/tests/preview.html` to exercise the overlay without
-installing or making an API call. Native host tests cover split message frames,
-input limits, origin checks, cancellation setup, OCR cleanup, and API errors.
-
-To remove the installation, remove the extension in Chrome and delete just
-`~/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.dot_home.magazine_reader.json`
-and `~/Library/Application Support/Magazine Reader/magazine-reader-host`.
+1. Remove the extension at `chrome://extensions`.
+2. Delete `~/Library/Application Support/Google/Chrome/NativeMessagingHosts/io.github.vibecoda.magazine_reader.json`.
+3. Delete `~/Library/Application Support/Magazine Reader/` (the host launcher and your key).
+4. Delete this repository; `data/` holds your saved summaries.

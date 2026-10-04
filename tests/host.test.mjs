@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { endianness, tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { ask, cleanText, cleanThread, deepseekKey, ENDPOINT, MODEL, STYLES, summarize, systemPrompt } from "../host/deepseek.mjs";
+import { ask, cleanText, cleanThread, deepseekKey, deepseekKeySource, ENDPOINT, MODEL, STYLES, summarize, systemPrompt } from "../host/deepseek.mjs";
 import { handle } from "../host/host.mjs";
 import { decodeImage, recognize } from "../host/ocr.mjs";
 import { extensionId, HOST_NAME, ROOT } from "../host/paths.mjs";
@@ -31,14 +31,16 @@ test("native framing rejects oversized input immediately and oversized output", 
   assert.throws(() => encodeMessage({ text: "あ".repeat(MAX_OUTPUT) }), /too large/);
 });
 
-test("DeepSeek key lookup follows Kotoba's environment and ~/.env2 convention without sourcing shell", () => {
+test("DeepSeek key lookup prefers the environment, then the key file, then ~/.env2, without sourcing shell", () => {
   const dir = mkdtempSync(join(tmpdir(), "magazine-key-test-"));
   try {
-    const envPath = join(dir, "env");
+    const envPath = join(dir, "env"), keyFile = join(dir, "deepseek-api-key"), missing = join(dir, "missing");
     writeFileSync(envPath, 'OTHER=ignore\nexport DEEPSEEK_API_KEY="fake-test-key=123" # comment\n');
-    assert.equal(deepseekKey({ env: {}, envPath }), "fake-test-key=123");
-    assert.equal(deepseekKey({ env: { DEEPSEEK_API_KEY: " override " }, envPath }), "override");
-    assert.equal(deepseekKey({ env: {}, envPath: join(dir, "missing") }), null);
+    assert.equal(deepseekKey({ env: {}, keyFile: missing, envPath }), "fake-test-key=123");
+    assert.equal(deepseekKey({ env: { DEEPSEEK_API_KEY: " override " }, keyFile, envPath }), "override");
+    writeFileSync(keyFile, "file-key\n");
+    assert.deepEqual(deepseekKeySource({ env: {}, keyFile, envPath }), { key: "file-key", source: keyFile });
+    assert.equal(deepseekKey({ env: {}, keyFile: missing, envPath: missing }), null);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -100,7 +102,7 @@ test("API failures have useful errors without relaying provider bodies or keys",
     await assert.rejects(summarize("日本語", { key: "fake-test-key", fetchImpl: async () => ({ status, ok: false,
       json: async () => { throw new Error("provider-secret"); } }) }), expected);
   }
-  await assert.rejects(summarize("日本語", { key: null }), /DEEPSEEK_API_KEY/);
+  await assert.rejects(summarize("日本語", { key: null }), /--set-key/);
   assert.throws(() => cleanText(" "), /No readable text/);
   assert.throws(() => cleanText("あ".repeat(60_001)), /Too much/);
 });
@@ -156,16 +158,26 @@ test("cancelling OCR aborts its executable and removes the temporary screenshot"
   } finally { controller.abort(); rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("installer pins node, OCR, and exactly this extension in a temporary installation", () => {
+test("installer pins node, OCR, and exactly this extension, replaces the legacy host, and stores a piped key privately", () => {
   const dir = mkdtempSync(join(tmpdir(), "magazine-install-test-"));
   try {
-    const data = join(dir, "data"), hosts = join(dir, "hosts");
-    execFileSync(process.execPath, [join(ROOT, "host", "install.mjs"), "--ocr", "/bin/echo", "--data-dir", data, "--hosts-dir", hosts]);
+    const data = join(dir, "data"), hosts = join(dir, "hosts"), args = ["--data-dir", data, "--hosts-dir", hosts];
+    mkdirSync(hosts); writeFileSync(join(hosts, "com.dot_home.magazine_reader.json"), "{}"); writeFileSync(join(hosts, "other.json"), "{}");
+    const run = (extra, input) => execFileSync(process.execPath, [join(ROOT, "host", "install.mjs"), ...extra, ...args], { input, encoding: "utf8" });
+    run(["--ocr", "/bin/echo"], "");
     const manifest = JSON.parse(readFileSync(join(hosts, `${HOST_NAME}.json`), "utf8"));
     assert.deepEqual(manifest.allowed_origins, [`chrome-extension://${extensionId()}/`]);
     const launcher = readFileSync(manifest.path, "utf8");
     assert.ok(launcher.includes(process.execPath)); assert.match(launcher, /MAGAZINE_OCR_BINARY='\/bin\/echo'/);
-    assert.equal(readdirSync(hosts).length, 1);
+    assert.deepEqual(readdirSync(hosts).sort(), [`${HOST_NAME}.json`, "other.json"]);
+    const output = run(["--set-key"], "sk-test-piped\n");
+    assert.ok(!output.includes("sk-test-piped"));
+    const keyFile = join(data, "deepseek-api-key");
+    assert.equal(readFileSync(keyFile, "utf8"), "sk-test-piped\n");
+    assert.equal(statSync(keyFile).mode & 0o777, 0o600);
+    assert.throws(() => run(["--set-key"], "two words\n"));
+    assert.match(run(["--check"], ""), /DeepSeek key: found/);
+    run(["--remove-key"], ""); assert.equal(existsSync(keyFile), false);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Magazine Reader",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "Select a magazine region, recognize Japanese locally, and read an English summary over the page.",
   "minimum_chrome_version": "116",
   "icons": {

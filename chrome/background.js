@@ -1,5 +1,5 @@
 /* global chrome */
-const HOST = "com.dot_home.magazine_reader";
+const HOST = "io.github.vibecoda.magazine_reader";
 const CHANNEL = "magazine-reader";
 const jobs = new Map();
 const sessionKey = tabId => `capture-${tabId}`;

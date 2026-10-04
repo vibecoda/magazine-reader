@@ -6,9 +6,13 @@ import { fileURLToPath } from "node:url";
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const ARCHIVE_DIR = resolve(ROOT, "data");
-// Kept from when this lived in dot_home, so existing installs and the extension keep matching.
-export const HOST_NAME = "com.dot_home.magazine_reader";
+export const HOST_NAME = "io.github.vibecoda.magazine_reader";
+/** Registered by versions before 0.6; the installer removes this one file if present. */
+export const LEGACY_HOST_NAMES = ["com.dot_home.magazine_reader"];
 export const DATA_DIR = join(homedir(), "Library", "Application Support", "Magazine Reader");
+export const KEY_FILE = join(DATA_DIR, "deepseek-api-key");
+export const OCR_SOURCE = join(ROOT, "ocr", "ocr.swift");
+export const OCR_BINARY = join(ROOT, "bin", "ocr");
 export const CHROME_DIR = join(homedir(), "Library", "Application Support", "Google", "Chrome", "NativeMessagingHosts");
 
 export function extensionId() {
