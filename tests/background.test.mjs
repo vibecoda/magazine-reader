@@ -19,6 +19,7 @@ function fixture({ store = {}, active = { id: 1, windowId: 2, url: URL_READER } 
       remove: async key => { delete store[key]; },
     } },
     tabs: {
+      get: async id => ({ ...active, id }),
       query: async () => [active],
       captureVisibleTab: async id => { captures.push(id); return "data:image/png;base64,fixture"; },
       sendMessage: async (tabId, message) => { sent.push({ tabId, message }); return { ok: true }; },
@@ -87,4 +88,40 @@ test("missing host errors are actionable and don't leave a live request", async 
   delete f.chrome.runtime.lastError;
   assert.equal((await f.ask({ type: "summarize", text: "本文", token, id: "two" })).ok, true);
   await f.ask({ type: "cancel", token });
+});
+
+test("reset takes a fresh capture, cancels old processing, and replaces an expired token", async () => {
+  const f = fixture(); await f.click();
+  const previous = { ...f.store["capture-1"] };
+  await f.ask({ type: "summarize", text: "本文", token: previous.token, id: "old-job" });
+  f.store["capture-1"].expires = 0;
+  assert.equal((await f.ask({ type: "reset", token: previous.token })).ok, true);
+  assert.deepEqual(f.captures, [2, 2]);
+  assert.equal(f.ports[0].disconnected, true);
+  assert.notEqual(f.store["capture-1"].token, previous.token);
+  assert.equal(f.sent.at(-1).message.type, "select");
+  assert.equal((await f.ask({ type: "summarize", text: "本文", token: previous.token, id: "stale" })).ok, false);
+});
+
+test("reset works without old metadata, but rejects another active tab or origin", async () => {
+  const f = fixture();
+  assert.equal((await f.ask({ type: "reset" })).ok, true);
+  f.sender.documentId = "old-document";
+  assert.equal((await f.ask({ type: "reset" })).ok, false);
+  assert.equal(f.captures.length, 1);
+  f.sender.url = "https://other.example";
+  assert.equal((await f.ask({ type: "reset" })).ok, false);
+  const other = fixture({ active: { id: 9, windowId: 2, url: URL_READER } });
+  assert.equal((await other.ask({ type: "reset" })).ok, false);
+  assert.equal(other.captures.length, 0);
+});
+
+test("native archive metadata comes from the capture, rather than overlay input", async () => {
+  const f = fixture(); await f.click(); const saved = f.store["capture-1"];
+  await f.ask({ type: "summarize", text: "本文", token: saved.token, id: "one", source: { url: "https://wrong.example" } });
+  const posted = f.ports[0].posted[0];
+  assert.equal(posted.source.url, URL_READER);
+  assert.equal(posted.source.captureId, saved.token);
+  assert.equal(posted.source.capturedAt, saved.capturedAt);
+  await f.ask({ type: "cancel", token: saved.token });
 });

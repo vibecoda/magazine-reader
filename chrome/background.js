@@ -19,23 +19,29 @@ async function assertActive(tab) {
   if (active?.id !== tab.id || active.url !== tab.url) throw new Error("The active tab changed. Return to the reader and click again.");
 }
 
+async function captureReader(tab, expectedDocumentId) {
+  if (!supported(tab.url)) throw new Error("Open a Rakuten Magazine reader tab to use Magazine Reader.");
+  cancel(tab.id);
+  await chrome.action.setBadgeText({ tabId: tab.id, text: "" });
+  await chrome.storage.session.remove(sessionKey(tab.id));
+  const injected = await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["summary.js", "content.js"] });
+  if (expectedDocumentId && injected[0]?.documentId !== expectedDocumentId)
+    throw new Error("The reader document changed. Click the extension again.");
+  const prepared = await send(tab.id, { type: "prepare" });
+  if (!prepared?.ok) throw new Error(prepared?.error || "Could not prepare the capture.");
+  await assertActive(tab);
+  const image = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "png" });
+  await assertActive(tab);
+  const capture = { token: crypto.randomUUID(), documentId: injected[0].documentId,
+    url: tab.url, capturedAt: new Date().toISOString(), expires: Date.now() + 15 * 60_000 };
+  await chrome.storage.session.set({ [sessionKey(tab.id)]: capture });
+  await send(tab.id, { type: "select", image, ...capture });
+}
+
 chrome.action.onClicked.addListener(async tab => {
   if (!tab?.id) return;
   try {
-    if (!supported(tab.url)) throw new Error("Open a Rakuten Magazine reader tab to use Magazine Reader.");
-    cancel(tab.id);
-    await chrome.action.setBadgeText({ tabId: tab.id, text: "" });
-    await chrome.storage.session.remove(sessionKey(tab.id));
-    const injected = await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["summary.js", "content.js"] });
-    const prepared = await send(tab.id, { type: "prepare" });
-    if (!prepared?.ok) throw new Error(prepared?.error || "Could not prepare the capture.");
-    await assertActive(tab);
-    const image = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "png" });
-    await assertActive(tab);
-    const capture = { token: crypto.randomUUID(), documentId: injected[0].documentId,
-      url: tab.url, capturedAt: new Date().toISOString(), expires: Date.now() + 15 * 60_000 };
-    await chrome.storage.session.set({ [sessionKey(tab.id)]: capture });
-    await send(tab.id, { type: "select", image, ...capture });
+    await captureReader(tab);
   } catch (error) {
     await chrome.action.setBadgeText({ tabId: tab.id, text: "!" }).catch(() => {});
     await chrome.action.setTitle({ tabId: tab.id, title: error.message }).catch(() => {});
@@ -47,6 +53,12 @@ async function request(message, sender) {
   if (sender.id !== chrome.runtime.id || sender.frameId !== 0 || !sender.tab || !supported(sender.url))
     throw new Error("Requests must come from the active reader overlay.");
   const tabId = sender.tab.id;
+  if (message.type === "reset") {
+    const tab = await chrome.tabs.get(tabId);
+    await assertActive(tab);
+    await captureReader(tab, sender.documentId);
+    return { ok: true };
+  }
   const capture = (await chrome.storage.session.get(sessionKey(tabId)))[sessionKey(tabId)];
   if (!capture || capture.token !== message.token || capture.documentId !== sender.documentId
     || capture.url !== sender.url || capture.expires < Date.now())
@@ -85,7 +97,9 @@ async function request(message, sender) {
     finish();
   }, 130_000);
   try {
-    port.postMessage({ id, type: message.type, ...(message.type === "capture"
+    port.postMessage({ id, type: message.type,
+      source: { url: capture.url, capturedAt: capture.capturedAt, captureId: capture.token },
+      ...(message.type === "capture"
       ? { image: message.image, mode: message.mode } : { text: message.text }) });
   } catch (error) { finish(); throw error; }
   return { ok: true, id };

@@ -8,6 +8,7 @@ window.chrome = { runtime: {
   onMessage: { addListener: fn => listeners.push(fn) },
   sendMessage: async message => {
     if (message.type === "cancel") { clearTimeout(fixtureTimer); return { ok: true }; }
+    if (message.type === "reset") { await startCapture(); return { ok: true }; }
     if (message.type === "capture") {
       let link = document.getElementById("download-crop");
       if (!link) { link = document.createElement("a"); link.id = "download-crop"; link.textContent = "Download synthetic crop"; document.querySelector("header").append(link); }
@@ -15,13 +16,15 @@ window.chrome = { runtime: {
     }
     fixtureTimer = setTimeout(() => {
       void deliver({ type: "progress", token: message.token, id: message.id, done: true, ok: true,
+        archive: { directory: "/synthetic-preview/archive", textPath: "/synthetic-preview/archive/ocr.txt",
+          summaryPath: message.mode === "ocr" ? null : "/synthetic-preview/archive/summary.md" },
         text: message.type === "capture" ? text : message.text,
         ...(message.mode === "ocr" ? {} : { summary, model: "deepseek-flash (UI fixture)" }) });
     }, Number(new URLSearchParams(location.search).get("delay")) || 250);
     return { ok: true, id: message.id };
   },
 } };
-document.getElementById("activate").addEventListener("click", async () => {
+async function startCapture() {
   await deliver({ type: "prepare" });
   const canvas = document.createElement("canvas");
   canvas.width = window.innerWidth * 2; canvas.height = window.innerHeight * 2;
@@ -35,5 +38,6 @@ document.getElementById("activate").addEventListener("click", async () => {
     "通勤時間が減り、仕事と生活の両立がしやすくなった。", "短い時間で同じ量の仕事を終える負担も報告された。",
     "すべての企業に適しているとは判断できない。"];
   lines.forEach((line, i) => ctx.fillText(line, x + 35, 190 + i * 48));
-  await deliver({ type: "select", image: canvas.toDataURL("image/png"), token: "fixture", capturedAt: new Date().toISOString() });
-});
+  await deliver({ type: "select", image: canvas.toDataURL("image/png"), token: crypto.randomUUID(), capturedAt: new Date().toISOString() });
+}
+document.getElementById("activate").addEventListener("click", startCapture);

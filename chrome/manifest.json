@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Magazine Reader",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Select a magazine region, recognize Japanese locally, and read an English summary over the page.",
   "minimum_chrome_version": "116",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqyDXeaa/vAEv8i0VinNxAy7Vdd4V7z8QZ8k0xY71R4W8mM6JouaMN0/EjC/RH0d0+qofzOwuisC2ngYi/+knSap+piY5bvnVnm8fAa0inkzKEs+2kvmHHJoUvs/6M3BlkA0JAiYc7No9ZEPJjA43aPmuILCe0XySNan5V6PO9yV51dpVmqcYaSC+0TgbTylEUTCKdoTYBuTkptU59fL/A8uPuePJ5luxQMtOki6EkVLdgEH9qyrNRdIu/J6IU1Qnd+FRkOQZ2DGxm4DN1h1HKOQGVgY/tIzHyYYkyaeEjJVlw/wzenzydw7DXwGrsMpFuJoT+czQhSlDf4v4NvdZ9wIDAQAB",

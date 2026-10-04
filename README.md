@@ -1,4 +1,4 @@
-# Magazine Reader
+# Magazine Reader · 0.2.0
 
 A small Chrome extension for the Rakuten Magazine web reader. Click the extension,
 select a region of the visible spread, and read an English summary in an overlay.
@@ -53,17 +53,37 @@ editing its JavaScript.
    English summaries have a clear title, spacious paragraphs and bullets, and
    highlighted limitations; Japanese text and the captured image sit in drawers.
 6. Review or edit **Japanese text**, then **Summarize text** to retry with corrections.
-  **Copy summary**, **Cancel**, close, and Escape are available in the overlay.
+   **Copy summary** copies the title and main summary without its final limitations
+   or disclaimer note. The full summary remains visible and saved in the archive.
+   **Cancel**, close, and Escape are available in the overlay.
+7. Turn to the next magazine page, then click **New capture** in the panel. This
+   cancels any current processing, hides the overlay before taking a fresh
+   screenshot, and returns to the compact selection strip. It also works when
+   the previous capture has expired. The saved files remain on disk.
 
 After changing extension code, reload it at `chrome://extensions` and refresh the
 Rakuten reader tab so the updated overlay is injected.
 
 The preview thumbnail and capture time identify the snapshot the summary describes.
 Turning a reader page does not turn the old summary into a summary of the new page:
-click the extension again for a new capture. OCR output stays available if DeepSeek
+use **New capture** or click the extension again. OCR output stays available if DeepSeek
 fails. Closing/cancelling disconnects the native host and aborts its pending work.
 
 ## Data and permissions
+
+Every OCR / summary request is archived automatically under
+`dot_home/data/magazine-reader/YYYY-MM-DD/<time>-<unique-id>/` (UTC dates):
+
+- `ocr.txt`: recognized Japanese text, or the edited transcript submitted for a retry.
+- `summary.md`: English summary, when the LLM call succeeds.
+- `metadata.json`: request ID, capture URL/time/ID, save time, and summary model/status.
+
+OCR is written **before** calling DeepSeek, so a failed or cancelled summary still
+leaves the transcript on disk. Each retry creates a new folder and preserves the
+earlier version; matching capture IDs link them. The panel confirms saving and
+shows the folder path when you hover over the confirmation. Archive folders/files
+are created with owner-only permissions, and this directory is Git-ignored.
+Screenshots are not archived. If local saving fails, the panel reports the error.
 
 - `activeTab` and `scripting`: capture and inject the overlay after you click.
   The worker permits only Rakuten's `/read/` pages. There are no persistent host
@@ -77,8 +97,8 @@ The host uses a private temporary PNG and deletes it after OCR, including on err
 The screenshot never goes to DeepSeek. Only the transcript goes to
 `https://api.deepseek.com/chat/completions`, using `deepseek-flash` with thinking
 disabled. Normal DeepSeek API billing applies. There is no automatic provider
-fallback, retry, permanent archive, or logging of keys / article text. Local
-in-memory images and text are released when the reader tab is unloaded.
+fallback, automatic retry, or logging of keys / article text. In-memory images and
+text are released when the reader tab is unloaded; saved archives remain on disk.
 Use within the permissions granted by your content provider.
 
 ## Limits

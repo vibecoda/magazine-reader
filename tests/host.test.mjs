@@ -95,8 +95,9 @@ test("OCR uses a private image file and cleans it up on both success and failure
 
 test("OCR-only never invokes DeepSeek; summary errors leave the recognized text available", async () => {
   const events = [];
-  const options = { emit: e => events.push(e), ocr: async () => "本文", llm: async () => { throw new Error("network failed"); } };
-  assert.deepEqual(await handle({ id: "test", type: "capture", image: PNG, mode: "ocr" }, options), { text: "本文" });
+  const options = { emit: e => events.push(e), ocr: async () => "本文", llm: async () => { throw new Error("network failed"); },
+    archive: () => ({ info: { directory: "fixture" } }) };
+  assert.deepEqual(await handle({ id: "test", type: "capture", image: PNG, mode: "ocr" }, options), { text: "本文", archive: { directory: "fixture" } });
   await assert.rejects(handle({ id: "test", type: "capture", image: PNG, mode: "summary" }, options), /network failed/);
   assert.ok(events.some(e => e.stage === "recognized" && e.text === "本文"));
 });

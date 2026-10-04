@@ -7,6 +7,7 @@ const context = {};
 runInNewContext(readFileSync(new URL("../chrome/summary.js", import.meta.url), "utf8"), context);
 const parse = text => JSON.parse(JSON.stringify(context.magazineSummary.parse(text)));
 const inline = text => JSON.parse(JSON.stringify(context.magazineSummary.inline(text)));
+const copyText = context.magazineSummary.copyText;
 
 test("plain-text summaries keep their title, wrapped paragraphs, bullets and limits", () => {
   assert.deepEqual(parse("A new working week\n\nThe trial lasted three months.\nIt involved 200 people.\n\nKey points\n• Less commuting\n  and more time at home\n• A shorter schedule\n\nLimitations\nNo productivity data."), [
@@ -36,4 +37,29 @@ test("inline formatting keeps source HTML literal and does not lose content", ()
   ]);
   assert.deepEqual(parse(""), []);
   assert.deepEqual(parse("A sentence with no separate title."), [{ type: "paragraph", text: "A sentence with no separate title." }]);
+});
+
+test("copy excludes a final labelled disclaimer while preserving the summary's formatting", () => {
+  const body = "A working week\n\nAn overview with **200 people**.\n\nKey points\n• First point\n• Second point";
+  for (const ending of [
+    "Limitations\nThe excerpt is incomplete.",
+    "Limitations: The excerpt is incomplete.",
+    "### Disclaimer\nThis summary is based on a partial excerpt.",
+    "**Limitations:** Some OCR is unclear.\n\nAnother paragraph of limitations.",
+    "**Note**: OCR is unclear.",
+    "Caveats\n- Missing figures\n- Partial text",
+  ]) assert.equal(copyText(`${body}\n\n${ending}`), body);
+});
+
+test("copy handles an older standalone disclaimer, but keeps factual caveats in the main summary", () => {
+  const body = "A trial\n\nThe study found no detailed productivity data.\n\n• The trial does not establish suitability for every company.";
+  assert.equal(copyText(`${body}\n\nThis summary is based on the provided excerpt only.`), body);
+  assert.equal(copyText(`${body}\n\nThe excerpt provides no detailed productivity measurements.`), body);
+  assert.equal(copyText(body), body);
+  assert.equal(copyText("A trial\n\n• Note: Employees reported more work."), "A trial\n\n• Note: Employees reported more work.");
+});
+
+test("copy leaves an earlier note section intact when another substantive section follows", () => {
+  const text = "Title\n\nNote\nAn earlier note.\n\n## Main points\n• A substantive point.";
+  assert.equal(copyText(text), text);
 });

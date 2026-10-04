@@ -14,7 +14,8 @@ Separate unrelated articles or sidebars rather than merging their claims.
 OCR can scramble vertical columns and misread characters. Flag consequential
 ambiguity; do not invent missing words, facts, or the rest of an incomplete article.
 Summarize only the supplied excerpt. Use plain text with bullet points, no HTML.
-Finish with a brief limitations note only if the excerpt is incomplete or unclear.`;
+Finish with a brief limitations note only if the excerpt is incomplete or unclear.
+Put this note in a separate final paragraph starting with "Limitations:".`;
 
 export function deepseekKey({ env = process.env, envPath = join(homedir(), ".env2") } = {}) {
   if (env.DEEPSEEK_API_KEY?.trim()) return env.DEEPSEEK_API_KEY.trim();

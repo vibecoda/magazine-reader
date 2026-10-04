@@ -22,7 +22,7 @@ child.stdout.on("data", chunk => {
     if (message.stage) console.error(message.stage);
     if (!message.done) continue;
     done = true; clearTimeout(timer);
-    if (message.ok) console.log(JSON.stringify({ text: message.text, summary: message.summary, model: message.model, ms: message.ms }, null, 2));
+    if (message.ok) console.log(JSON.stringify({ text: message.text, summary: message.summary, model: message.model, ms: message.ms, archive: message.archive }, null, 2));
     else { console.error(message.error); process.exitCode = 1; }
     child.stdin.end();
   }
