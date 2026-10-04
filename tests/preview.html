@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Magazine Reader · UI test fixture</title>
+<style>
+  body{margin:0;background:#36464d;color:#f0f3f4;font-family:system-ui,sans-serif}
+  header{padding:18px 24px;display:flex;gap:20px;align-items:center}
+  button{font:inherit;padding:9px 15px;border:0;border-radius:8px;background:#c6ee98;color:#173020;cursor:pointer}
+  .page{margin:15px auto;width:min(850px,90vw);background:#faf8f2;color:#222;padding:40px;box-sizing:border-box;min-height:560px}
+  h1{font-family:serif;font-size:32px}.columns{display:grid;grid-template-columns:1fr 1fr;gap:30px;line-height:2}
+  .label{font-size:12px;color:#60717a;border-bottom:1px solid #bbb;padding-bottom:14px}
+</style>
+<header><button id="activate">Preview capture overlay</button><span>UI fixture · synthetic article and simulated processing</span></header>
+<article class="page"><div class="label">MAGAZINE READER / SYNTHETIC TEST PAGE</div>
+<h1>企業の新しい働き方</h1><div class="columns"><div>
+<p>ある企業は週四日の勤務制度を試験的に導入した。参加した社員は二百人で、期間は三か月だった。</p>
+<p>調査では、通勤時間が減り、仕事と生活の両立がしやすくなったと報告された。</p>
+</div><div><p>一方、短い時間で同じ量の仕事を終える必要があるため、負担が増えたと感じる社員もいた。</p>
+<p>この結果だけで、すべての企業に同じ制度が適していると判断することはできない。</p>
+</div></div></article>
+<script src="preview.js"></script>
+<script src="../chrome/summary.js"></script>
+<script src="../chrome/content.js"></script>
+</html>
