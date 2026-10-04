@@ -64,13 +64,16 @@ async function request(message, sender) {
     || capture.url !== sender.url || capture.expires < Date.now())
     throw new Error("This capture expired. Click the extension to capture again.");
   if (message.type === "cancel") { cancel(tabId); return { ok: true }; }
-  if (!["capture", "summarize"].includes(message.type)) throw new Error("Unknown overlay request.");
+  if (!["capture", "summarize", "ask"].includes(message.type)) throw new Error("Unknown overlay request.");
   if (typeof message.id !== "string" || !/^[a-zA-Z0-9-]{1,80}$/.test(message.id)) throw new Error("Invalid request ID.");
   if (jobs.has(tabId)) throw new Error("A request is already running.");
   if (message.type === "capture" && (!/^data:image\/png;base64,/.test(message.image || "")
     || message.image.length > 28 * 1024 * 1024 || !["ocr", "summary"].includes(message.mode)))
     throw new Error("Invalid or oversized screenshot.");
-  if (message.type === "summarize" && (typeof message.text !== "string" || !message.text.trim() || message.text.length > 60_000))
+  if (message.type === "ask" && (typeof message.question !== "string" || !message.question.trim()
+    || message.question.length > 2000 || !Array.isArray(message.history ?? []) || (message.history ?? []).length > 8))
+    throw new Error("Ask a question of up to 2,000 characters.");
+  if (message.type !== "capture" && (typeof message.text !== "string" || !message.text.trim() || message.text.length > 60_000))
     throw new Error("Supply between 1 and 60,000 characters of OCR text.");
   // The native host checks the exact style list; this only bounds what is forwarded.
   if (message.style !== undefined && (typeof message.style !== "string" || !/^[a-z]{1,20}$/.test(message.style)))
@@ -103,7 +106,9 @@ async function request(message, sender) {
     port.postMessage({ id, type: message.type, style: message.style,
       source: { url: capture.url, capturedAt: capture.capturedAt, captureId: capture.token },
       ...(message.type === "capture"
-      ? { image: message.image, mode: message.mode } : { text: message.text }) });
+      ? { image: message.image, mode: message.mode }
+      : message.type === "ask" ? { text: message.text, question: message.question, history: message.history ?? [] }
+        : { text: message.text }) });
   } catch (error) { finish(); throw error; }
   return { ok: true, id };
 }

@@ -13,6 +13,11 @@
     glossary: ["Vocabulary", "The gist plus a Japanese word list", "Gist and vocabulary"],
     stocks: ["Stocks", "Companies and securities codes, linked to Monex", "Stocks mentioned"],
   };
+  // The Ask tab is a conversation about the page rather than a summary style.
+  const TABS = { ...STYLES, ask: ["Ask", "Ask DeepSeek anything about this page", "Questions about this page"] };
+  const SUGGESTIONS = ["What is this article mainly about?", "Explain the key numbers and what they mean",
+    "What are the implications for investors?", "Explain the difficult Japanese terms", "What is unclear or missing in this excerpt?"];
+  const MAX_TURNS = 8;
   const FONTS = {
     serif: ["Serif", `"Iowan Old Style","Charter","Georgia","Hiragino Mincho ProN",serif`],
     sans: ["Sans", `system-ui,-apple-system,"Helvetica Neue","Hiragino Sans",sans-serif`],
@@ -101,6 +106,15 @@
     .summary h4{font:650 11px/1.5 system-ui,sans-serif;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin:2em 0 .8em;text-align:left}
     .summary p{margin:0 0 1em}.summary .lead{font-size:1.06em}.summary ul,.summary ol{margin:.8em 0 1.4em;padding-left:1.3em}.summary li{padding-left:.35em;margin:0 0 .7em}.summary li::marker{color:var(--accent)}
     .summary strong{color:var(--heading)}
+    .ask{margin-top:4px}.thread .turn{margin:0 0 1.4em}.thread .question{margin:0 0 .7em auto;width:fit-content;max-width:85%;background:var(--surface);border:1px solid var(--line);border-radius:14px 14px 4px 14px;padding:.55em .9em;font-size:.9em;line-height:1.5;white-space:pre-wrap;text-align:left}
+    .thread .answer{padding-left:.9em;border-left:2px solid var(--accent)}.thread .answer>:last-child{margin-bottom:0}.answer-error{color:var(--error);font-size:.85em}
+    .answer.pending{display:flex;gap:6px;padding:.6em .9em}.answer.pending i{width:7px;height:7px;border-radius:50%;background:var(--muted);animation:pulse 1s ease-in-out infinite}.answer.pending i:nth-child(2){animation-delay:.15s}.answer.pending i:nth-child(3){animation-delay:.3s}
+    @keyframes pulse{50%{opacity:.25;transform:translateY(-2px)}}
+    .suggestions{display:flex;flex-wrap:wrap;gap:7px;margin:4px 0 14px}.chip{background:var(--btn);border:1px solid var(--btn-line);color:var(--btn-fg);border-radius:999px;padding:6px 12px;font-size:12px}.chip:hover{background:var(--surface)}
+    .composer{position:sticky;bottom:-34px;display:flex;gap:8px;align-items:flex-end;background:var(--bg);padding:10px 0 6px;border-top:1px solid var(--line)}
+    .ask-input{margin:0;height:auto;min-height:44px;max-height:180px;resize:none;font-family:system-ui,-apple-system,"Hiragino Sans",sans-serif;font-size:15px;line-height:1.5;padding:10px 12px}
+    .ask-send{flex:none;height:44px;padding:0 18px;background:var(--primary);color:var(--primary-fg)}
+    .composer-foot{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--muted);padding-bottom:4px}
     .summary ul.stocks{list-style:none;padding:0;margin:.6em 0 1.4em}.summary li.stock{display:flex;gap:.9em;align-items:flex-start;padding:.7em 0;margin:0;border-bottom:1px solid var(--line)}
     .ticker{flex:none;min-width:4.6em;text-align:center;font:650 .8em/1 "SF Mono",Menlo,monospace;letter-spacing:.04em;padding:.55em .5em;margin-top:.15em;border-radius:7px;background:var(--primary);color:var(--primary-fg);text-decoration:none}
     a.ticker:hover{filter:brightness(1.12)}a.ticker:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.ticker.none{background:var(--surface);color:var(--muted)}
@@ -112,7 +126,7 @@
     .skeleton{padding:4px 0 10px}.skeleton i{display:block;height:.9em;margin:0 0 1em;border-radius:5px;background:linear-gradient(90deg,var(--skeleton) 30%,var(--bg) 50%,var(--skeleton) 70%) 0 0/300% 100%;animation:shimmer 1.4s linear infinite;font-size:var(--reader-size)}
     .skeleton i:first-child{height:1.6em;width:65%;margin-bottom:1.4em}.skeleton i:nth-child(3n){width:82%}.skeleton i:nth-child(4n){width:58%}
     @keyframes shimmer{to{background-position:-300% 0}}
-    @media(prefers-reduced-motion:reduce){.skeleton i,.reader,.panel,.settings{animation:none}.panel-body{scroll-behavior:auto}}
+    @media(prefers-reduced-motion:reduce){.answer.pending i,.skeleton i,.reader,.panel,.settings{animation:none}.panel-body{scroll-behavior:auto}}
     details{border-top:1px solid var(--line);padding-top:14px;margin-top:20px}summary{cursor:pointer;color:var(--muted);font-size:12px;font-weight:550;line-height:1.5}
     textarea{display:block;width:100%;height:240px;resize:vertical;background:var(--field);color:var(--fg);border:1px solid var(--btn-line);border-radius:8px;padding:13px;line-height:1.8;margin-top:12px;font-size:15px;font-family:"Hiragino Sans","Hiragino Kaku Gothic ProN",system-ui,sans-serif}
     .preview{width:100%;max-height:220px;object-fit:contain;background:var(--surface);border-radius:6px;margin-top:12px}
@@ -129,6 +143,8 @@
   let resetting = false, archiveInfo = null, settingsOpen = false;
   let ocrText = "", cropped = "", activeStyle = DEFAULTS.style;
   const summaries = new Map(); // style → { text, source, truncated }
+  const thread = []; // { question, answer?, error?, truncated? }; at most one turn is pending
+  let askNode = null, threadNode = null, askInput = null, askButton = null, suggestionsNode = null, clearButton = null;
   let panel = null, panelStatus = null, summaryNode = null, skeleton = null, readingLabel = null, textArea = null, archiveNode = null;
   let summarizeButton = null, copyButton = null, cancelButton = null, settingsButton = null, settingsSheet = null, tabButtons = [];
   const syncers = [];
@@ -218,7 +234,7 @@
       segmented("Theme", "theme", THEMES), segmented("Position", "layout", LAYOUTS),
       segmented("Alignment", "align", { left: "Ragged", justify: "Justified" }));
     const foot = node("div", "settings-foot"), keys = node("span");
-    for (const [key, text] of [["+", " / "], ["−", " size · "], ["1", "–"], [String(Object.keys(STYLES).length), " style · "], ["Esc", " close"]]) keys.append(node("kbd", "", key), text);
+    for (const [key, text] of [["+", " / "], ["−", " size · "], ["1", "–"], [String(Object.keys(TABS).length), " tab · "], ["Esc", " close"]]) keys.append(node("kbd", "", key), text);
     foot.append(keys, button("Reset reading settings", () => saveSettings({ ...DEFAULTS, style: settings.style, toolbarSide: settings.toolbarSide }), "link"));
     sheet.append(foot); return sheet;
   }
@@ -233,7 +249,7 @@
     archiveInfo = info;
     if (!archiveNode) return;
     archiveNode.hidden = !info;
-    archiveNode.textContent = info ? (info.summaryPath ? "OCR and summary saved locally" : "OCR saved locally") : "";
+    archiveNode.textContent = info ? (info.summaryPath ? "OCR and result saved locally" : "OCR saved locally") : "";
     archiveNode.title = info?.directory || "";
   }
   function setStatus(text, error = false) {
@@ -243,58 +259,94 @@
   }
   function updateBusy(value) {
     busy = value;
-    const entry = current(), fresh = entry && entry.source === ocrText;
+    const asking = activeStyle === "ask", entry = current(), fresh = entry && entry.source === ocrText;
     if (summarizeButton) {
-      summarizeButton.disabled = value || !ocrText.trim(); summarizeButton.hidden = value && !ocrText.trim();
+      summarizeButton.disabled = value || !ocrText.trim(); summarizeButton.hidden = asking || (value && !ocrText.trim());
       summarizeButton.textContent = fresh ? "Regenerate" : activeStyle === "translation" ? "Translate" : "Summarize";
       summarizeButton.title = fresh ? `Ask DeepSeek for a new ${STYLES[activeStyle][0].toLowerCase()} version` : "";
     }
-    if (copyButton) { copyButton.disabled = !entry; copyButton.hidden = !entry || value; }
+    const copyable = asking ? thread.some(turn => turn.answer) : Boolean(entry);
+    if (copyButton) { copyButton.disabled = !copyable; copyButton.hidden = !copyable || value; copyButton.title = asking ? "Copy the conversation" : "Copy without the limitations note"; }
     if (cancelButton) cancelButton.hidden = !value;
     if (textArea) textArea.disabled = value;
-    if (skeleton) skeleton.hidden = !value;
-    if (summaryNode) summaryNode.hidden = value;
+    if (skeleton) skeleton.hidden = !value || asking;
+    if (summaryNode) summaryNode.hidden = value || asking;
+    if (askNode) {
+      askNode.hidden = !asking;
+      const ready = Boolean(ocrText.trim());
+      askInput.disabled = value || !ready;
+      askInput.placeholder = ready ? "Ask anything about this page…" : "Waiting for the Japanese text…";
+      askButton.disabled = value || !ready || !askInput.value.trim();
+      suggestionsNode.hidden = thread.length > 0 || !ready;
+      for (const chip of suggestionsNode.children) chip.disabled = value;
+      clearButton.hidden = !thread.length || value;
+    }
     for (const tab of tabButtons) {
       const key = tab.dataset.style;
       tab.disabled = value; tab.setAttribute("aria-selected", String(key === activeStyle));
       tab.classList.toggle("cached", summaries.has(key) && key !== activeStyle);
     }
   }
-  function renderSummary() {
-    if (!summaryNode) return;
-    const entry = current(), text = entry?.text || "";
-    summaryNode.replaceChildren();
-    const appendInline = (target, value) => {
-      for (const part of globalThis.magazineSummary.inline(value)) {
-        if (part.type === "text") target.append(document.createTextNode(part.text));
-        else target.append(node(part.type, "", part.text));
-      }
-    };
-    let firstParagraph = true;
+  const appendInline = (target, value) => {
+    for (const part of globalThis.magazineSummary.inline(value)) {
+      if (part.type === "text") target.append(document.createTextNode(part.text));
+      else target.append(node(part.type, "", part.text));
+    }
+  };
+  /** Renders model text as DOM; nothing is parsed as HTML. */
+  function renderBlocks(target, text, { stocks = false, lead = true } = {}) {
+    let firstParagraph = lead;
     for (const block of globalThis.magazineSummary.parse(text)) {
-      if (block.type === "list" && activeStyle === "stocks" && block.items.every(item => globalThis.magazineSummary.stock(item))) {
+      if (block.type === "list" && stocks && block.items.every(item => globalThis.magazineSummary.stock(item))) {
         const list = node("ul", "stocks");
-        for (const item of block.items) list.append(stockRow(globalThis.magazineSummary.stock(item), appendInline));
-        summaryNode.append(list); continue;
+        for (const item of block.items) list.append(stockRow(globalThis.magazineSummary.stock(item)));
+        target.append(list); continue;
       }
       if (block.type === "list") {
         const list = node(block.ordered ? "ol" : "ul");
         for (const item of block.items) { const li = node("li"); appendInline(li, item); list.append(li); }
-        summaryNode.append(list); continue;
+        target.append(list); continue;
       }
       const element = node(block.type === "title" ? "h3" : block.type === "heading" ? "h4" : "p",
         block.type === "note" ? "note" : block.type === "paragraph" && firstParagraph ? "lead" : "");
       if (block.type === "note") element.append(node("span", "note-label", "Limits of this excerpt"));
       if (block.type === "paragraph") firstParagraph = false;
-      appendInline(element, block.text); summaryNode.append(element);
+      appendInline(element, block.text); target.append(element);
     }
+  }
+  function renderThread() {
+    if (!threadNode) return;
+    threadNode.replaceChildren();
+    for (const turn of thread) {
+      const item = node("div", "turn");
+      item.append(node("div", "question", turn.question));
+      const answer = node("div", "answer");
+      if (turn.answer) {
+        // Answers are prose, so a short first line is not promoted to a title.
+        renderBlocks(answer, turn.answer, { lead: false });
+        answer.querySelectorAll("h3").forEach(h => { const p = node("p"); p.append(...h.childNodes); h.replaceWith(p); });
+        if (turn.truncated) answer.append(node("p", "note", "This answer reached the length limit. Ask a narrower question for the rest."));
+      } else if (turn.error) answer.append(node("p", "answer-error", turn.error));
+      else { answer.classList.add("pending"); answer.setAttribute("aria-label", "DeepSeek is answering"); for (let i = 0; i < 3; i++) answer.append(node("i")); }
+      item.append(answer); threadNode.append(item);
+    }
+    readingLabel.hidden = !thread.length;
+    const answered = thread.filter(turn => turn.answer).length;
+    readingLabel.replaceChildren(node("span", "", TABS.ask[2]), node("span", "", `${answered} answered`));
+  }
+  function renderSummary() {
+    if (!summaryNode) return;
+    if (activeStyle === "ask") { summaryNode.replaceChildren(); renderThread(); return; }
+    const entry = current(), text = entry?.text || "";
+    summaryNode.replaceChildren();
+    renderBlocks(summaryNode, text, { stocks: activeStyle === "stocks" });
     const words = text.trim() ? text.trim().split(/\s+/).length : 0;
     readingLabel.hidden = !text;
     readingLabel.replaceChildren(node("span", "", `${STYLES[activeStyle][2]} · ${Math.max(1, Math.ceil(words / 200))} min read`),
       node("span", "", entry && entry.source !== ocrText ? "Japanese text edited since" : `${words} words`));
     summaryNode.parentElement.scrollTop = 0;
   }
-  function stockRow(row, appendInline) {
+  function stockRow(row) {
     const li = node("li", "stock"), url = row.code && globalThis.magazineSummary.stockUrl(row.code);
     if (url) {
       const link = node("a", "ticker", row.code);
@@ -311,8 +363,23 @@
     if (row.note) { const note = node("div", "stock-note"); appendInline(note, row.note); body.append(note); }
     li.append(body); return li;
   }
+  function askQuestion(question) {
+    question = question.trim();
+    if (busy || !question || !ocrText.trim()) return;
+    // Failed turns are shown but never sent back as history.
+    const history = thread.filter(turn => turn.answer).slice(-MAX_TURNS).map(({ question: q, answer }) => ({ question: q, answer }));
+    for (let i = thread.length - 1; i >= 0; i--) if (thread[i].error) thread.splice(i, 1);
+    thread.push({ question }); askInput.value = ""; renderThread();
+    askNode.parentElement.scrollTop = askNode.parentElement.scrollHeight;
+    void submit({ type: "ask", text: ocrText, question, history });
+  }
   function chooseStyle(key) {
-    if (busy || !Object.hasOwn(STYLES, key)) return;
+    if (busy) return;
+    if (key === "ask") {
+      activeStyle = "ask"; renderSummary(); updateBusy(false); setStatus("");
+      askInput.focus({ preventScroll: true }); return;
+    }
+    if (!Object.hasOwn(STYLES, key)) return;
     activeStyle = key; saveSettings({ style: key });
     renderSummary(); updateBusy(false);
     if (summaries.has(key) || !ocrText.trim()) { setStatus(""); return; }
@@ -321,13 +388,23 @@
   async function submit(payload) {
     const id = crypto.randomUUID();
     updateArchive(null);
-    jobId = id; jobStyle = payload.mode === "ocr" ? null : payload.style; updateBusy(true);
+    jobId = id; jobStyle = payload.type === "ask" ? "ask" : payload.mode === "ocr" ? null : payload.style; updateBusy(true);
     if (copyButton) copyButton.textContent = "Copy";
-    setStatus(payload.type === "capture" ? "Reading Japanese text locally…" : `Creating ${STYLES[payload.style][2].toLowerCase()} with DeepSeek…`);
+    setStatus(payload.type === "capture" ? "Reading Japanese text locally…" : payload.type === "ask" ? ""
+      : `Creating ${STYLES[payload.style][2].toLowerCase()} with DeepSeek…`);
     try {
       const response = await ask({ ...payload, id });
       if (!response?.ok) throw new Error(response?.error || "The extension did not respond.");
-    } catch (error) { if (jobId === id) { updateBusy(false); jobId = null; setStatus(error.message, true); } }
+    } catch (error) {
+      if (jobId !== id) return;
+      updateBusy(false); jobId = null;
+      if (payload.type === "ask") failQuestion(error.message); else setStatus(error.message, true);
+    }
+  }
+  function failQuestion(error) {
+    const turn = thread.at(-1);
+    if (turn && !turn.answer) { turn.error = error; if (!askInput.value) askInput.value = turn.question; }
+    renderThread(); updateBusy(false);
   }
   function showPanel() {
     const reader = node("div", "reader");
@@ -338,8 +415,8 @@
     settingsButton.setAttribute("aria-label", "Reading settings"); settingsButton.title = "Typeface, size, spacing, width, theme";
     const closeButton = button("×", close, "icon-button close"); closeButton.setAttribute("aria-label", "Close reader");
     tools.append(settingsButton, closeButton); header.append(brand, tools);
-    const tabs = node("div", "style-tabs"); tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", "Summary style");
-    tabButtons = Object.entries(STYLES).map(([key, [label, description]], index) => {
+    const tabs = node("div", "style-tabs"); tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", "Summary style or questions");
+    tabButtons = Object.entries(TABS).map(([key, [label, description]], index) => {
       const tab = button(label, () => chooseStyle(key), "style-tab");
       tab.dataset.style = key; tab.setAttribute("role", "tab"); tab.title = `${description} (${index + 1})`; tabs.append(tab); return tab;
     });
@@ -357,6 +434,24 @@
     skeleton = node("div", "skeleton"); skeleton.setAttribute("aria-hidden", "true");
     for (let i = 0; i < 8; i++) skeleton.append(node("i")); body.append(skeleton);
     summaryNode = node("article", "summary"); summaryNode.setAttribute("aria-label", "English summary"); body.append(summaryNode);
+    askNode = node("section", "ask"); askNode.setAttribute("aria-label", "Ask about this page");
+    threadNode = node("div", "thread summary"); threadNode.setAttribute("aria-live", "polite");
+    suggestionsNode = node("div", "suggestions");
+    for (const text of SUGGESTIONS) suggestionsNode.append(button(text, () => askQuestion(text), "chip"));
+    const composer = node("div", "composer");
+    askInput = node("textarea", "ask-input"); askInput.rows = 2; askInput.maxLength = 2000; askInput.setAttribute("aria-label", "Question about this page");
+    const fit = () => { askInput.style.height = "auto"; askInput.style.height = `${Math.min(askInput.scrollHeight + 2, 180)}px`; };
+    askInput.addEventListener("input", () => { fit(); askButton.disabled = busy || !askInput.value.trim() || !ocrText.trim(); });
+    askInput.addEventListener("keydown", event => {
+      if (event.key !== "Enter" || event.shiftKey || event.isComposing || event.keyCode === 229) return;
+      event.preventDefault(); askQuestion(askInput.value); fit();
+    });
+    askButton = button("Ask", () => { askQuestion(askInput.value); fit(); }, "primary ask-send");
+    const composerFoot = node("div", "composer-foot");
+    clearButton = button("Clear conversation", () => { thread.length = 0; renderThread(); updateBusy(false); askInput.focus(); }, "link");
+    composerFoot.append(node("span", "", "Enter to ask · Shift+Enter for a new line · uses this page's Japanese text"), clearButton);
+    composer.append(askInput, askButton);
+    askNode.append(threadNode, suggestionsNode, composer, composerFoot); body.append(askNode);
     const details = node("details"); details.append(node("summary", "", "Japanese text · review or edit"));
     textArea = node("textarea"); textArea.setAttribute("aria-label", "Japanese OCR text"); textArea.lang = "ja"; textArea.maxLength = 60_000; textArea.value = ocrText;
     textArea.addEventListener("input", () => { ocrText = textArea.value; updateBusy(busy); }); details.append(textArea); body.append(details);
@@ -368,17 +463,24 @@
     const actions = node("div", "actions");
     summarizeButton = button("Summarize", () => { ocrText = textArea.value; void submit({ type: "summarize", text: ocrText, style: activeStyle }); }, "primary");
     copyButton = button("Copy", async event => {
-      const entry = current(); if (!entry) return;
+      const entry = current();
+      const text = activeStyle === "ask"
+        ? thread.filter(turn => turn.answer).map(turn => `Q: ${turn.question}\n\n${turn.answer}`).join("\n\n---\n\n")
+        : entry && globalThis.magazineSummary.copyText(entry.text);
+      if (!text) return;
       try {
-        await navigator.clipboard.writeText(globalThis.magazineSummary.copyText(entry.text)); event.target.textContent = "Copied";
+        await navigator.clipboard.writeText(text); event.target.textContent = "Copied";
         setTimeout(() => { event.target.textContent = "Copy"; }, 1600);
       } catch { setStatus("Clipboard access failed. Select and copy the summary text manually.", true); }
     });
-    copyButton.title = "Copy without the limitations note";
-    cancelButton = button("Cancel", () => { void ask({ type: "cancel" }).catch(() => {}); updateBusy(false); jobId = null; setStatus("Cancelled. Recognized text is retained."); });
+    cancelButton = button("Cancel", () => {
+      void ask({ type: "cancel" }).catch(() => {});
+      const asking = jobStyle === "ask"; jobId = null; jobStyle = null; updateBusy(false);
+      if (asking) failQuestion("Cancelled."); else setStatus("Cancelled. Recognized text is retained.");
+    });
     actions.append(button("New capture", standby), node("span", "spacer"), cancelButton, copyButton, summarizeButton);
     archiveNode = node("span", "archive-status"); archiveNode.setAttribute("role", "status"); updateArchive(archiveInfo);
-    const footnote = node("div", "footnote"); footnote.append(archiveNode, node("span", "", "Summaries send text to DeepSeek. Images stay on this Mac."));
+    const footnote = node("div", "footnote"); footnote.append(archiveNode, node("span", "", "Summaries and questions send text to DeepSeek. Images stay on this Mac."));
     const bottom = node("div", "panel-bottom"); bottom.append(actions, footnote); panel.append(bottom);
     reader.append(panel); resetUI(reader);
     applySettings(); toggleSettings(settingsOpen); renderSummary(); updateBusy(busy);
@@ -414,7 +516,7 @@
         const canvas = document.createElement("canvas");
         canvas.width = Math.max(1, Math.round(region.width * sx)); canvas.height = Math.max(1, Math.round(region.height * sy));
         canvas.getContext("2d").drawImage(image, region.x * sx, region.y * sy, region.width * sx, region.height * sy, 0, 0, canvas.width, canvas.height);
-        cropped = canvas.toDataURL("image/png"); ocrText = ""; summaries.clear(); activeStyle = settings.style;
+        cropped = canvas.toDataURL("image/png"); ocrText = ""; summaries.clear(); thread.length = 0; activeStyle = settings.style;
         showPanel(); await submit({ type: "capture", image: cropped, mode, style: activeStyle });
       } catch (error) { showPanel(); updateBusy(false); setStatus(error.message, true); }
     };
@@ -452,7 +554,7 @@
     }
     if (message.type === "select") {
       await settingsReady;
-      capture = message; region = null; ocrText = ""; summaries.clear(); cropped = ""; jobId = null; jobStyle = null; busy = false; archiveInfo = null;
+      capture = message; region = null; ocrText = ""; summaries.clear(); thread.length = 0; cropped = ""; jobId = null; jobStyle = null; busy = false; archiveInfo = null;
       activeStyle = settings.style; settingsOpen = false;
       image = new Image(); image.src = capture.image; await image.decode(); selectionUI(); return { ok: true };
     }
@@ -462,10 +564,16 @@
     if (typeof message.text === "string") { ocrText = message.text; textArea.value = ocrText; }
     if (message.stage === "recognizing") setStatus("Reading Japanese text locally…");
     if (message.stage === "recognized") setStatus("Japanese text recognized.");
-    if (message.stage === "summarizing" && jobStyle) setStatus(`Creating ${STYLES[jobStyle][2].toLowerCase()} with DeepSeek…`);
+    if (message.stage === "summarizing" && jobStyle && jobStyle !== "ask") setStatus(`Creating ${STYLES[jobStyle][2].toLowerCase()} with DeepSeek…`);
     if (message.done) {
       const style = jobStyle;
       jobId = null; jobStyle = null;
+      if (style === "ask") {
+        if (!message.ok || typeof message.answer !== "string") { failQuestion(message.error || "DeepSeek did not answer."); return { ok: true }; }
+        Object.assign(thread.at(-1), { answer: message.answer, truncated: Boolean(message.truncated) });
+        updateBusy(false); renderThread(); askInput.focus({ preventScroll: true });
+        return { ok: true };
+      }
       if (!message.ok) { updateBusy(false); setStatus(message.error || "Processing failed.", true); return { ok: true }; }
       if (message.summary && style) {
         summaries.set(style, { text: message.summary, source: ocrText, truncated: Boolean(message.truncated) });
@@ -492,7 +600,7 @@
     event.preventDefault(); next.focus({ preventScroll: true });
   }
   document.addEventListener("keydown", event => {
-    if (host.style.display === "none") return;
+    if (host.style.display === "none" || event.isComposing) return;
     if (event.key === "Escape") {
       if (isReader() && settingsOpen) toggleSettings(false); else close();
       event.stopPropagation(); return;
@@ -502,7 +610,7 @@
     // Docked reading leaves the page usable; only shortcuts typed while focus is in the panel are ours.
     if (!isReader() || (!modal && !root.activeElement) || event.metaKey || event.ctrlKey || event.altKey) return;
     if (root.activeElement?.matches("textarea, input, select")) return;
-    const styleKeys = Object.keys(STYLES);
+    const styleKeys = Object.keys(TABS);
     if (event.key === "+" || event.key === "=") saveSettings({ size: settings.size + 1 });
     else if (event.key === "-" || event.key === "_") saveSettings({ size: settings.size - 1 });
     else if (/^[1-9]$/.test(event.key) && styleKeys[event.key - 1]) chooseStyle(styleKeys[event.key - 1]);

@@ -1,4 +1,4 @@
-# Magazine Reader · 0.4.0
+# Magazine Reader · 0.5.0
 
 A small Chrome extension for the Rakuten Magazine web reader. Click the extension,
 select a region of the visible spread, and read an English summary in an overlay.
@@ -64,6 +64,13 @@ editing its JavaScript.
    in a new tab. Codes the model supplied itself, rather than found in the article,
    carry a **verify code** badge; uncertain or unlisted companies get no link.
 
+   The last tab, **Ask**, is a conversation about the page. Type any question (or
+   pick a suggestion) and press Enter; Shift+Enter adds a line. DeepSeek receives
+   the page's Japanese text plus up to 8 earlier questions and answers, and is told
+   to answer from the article and to label any outside background knowledge.
+   Edits to the Japanese text apply to the next question. **Copy** copies the whole
+   conversation and **Clear conversation** starts over; a new capture also clears it.
+
    Choosing a tab you haven't generated yet sends the same OCR text again in that
    style; generated styles are kept for the capture (marked with a dot) and switch
    instantly. **Regenerate** asks for a fresh version of the current style.
@@ -71,7 +78,7 @@ editing its JavaScript.
    line spacing, width, theme (paper, sepia, night), position (centered, or docked
    left/right so the magazine stays usable), and ragged or justified alignment.
    Settings and the last style are remembered in `chrome.storage.local`.
-   Keys while the reader has focus: `+` / `-` text size, `1`–`7` style, Escape
+   Keys while the reader has focus: `+` / `-` text size, `1`–`8` tab, Escape
    closes settings, then the reader. A thin bar under the header shows reading progress.
    Review or edit **Japanese text**, then **Summarize** / **Regenerate** to retry with
    corrections. **Copy** copies the title and main text without its final
@@ -97,8 +104,8 @@ Every OCR / summary request is archived automatically under
 `dot_home/data/magazine-reader/YYYY-MM-DD/<time>-<unique-id>/` (UTC dates):
 
 - `ocr.txt`: recognized Japanese text, or the edited transcript submitted for a retry.
-- `summary.md`: English summary, when the LLM call succeeds.
-- `metadata.json`: request ID, capture URL/time/ID, save time, summary style, and model/status.
+- `summary.md`: English summary, or for **Ask** the question and answer, when the LLM call succeeds.
+- `metadata.json`: request ID, capture URL/time/ID, save time, summary style (`ask` for questions), and model/status.
 
 OCR is written **before** calling DeepSeek, so a failed or cancelled summary still
 leaves the transcript on disk. Each retry creates a new folder and preserves the

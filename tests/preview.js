@@ -31,7 +31,8 @@ window.chrome = { storage, runtime: {
         archive: { directory: "/synthetic-preview/archive", textPath: "/synthetic-preview/archive/ocr.txt",
           summaryPath: message.mode === "ocr" ? null : "/synthetic-preview/archive/summary.md" },
         text: message.type === "capture" ? text : message.text,
-        ...(message.mode === "ocr" ? {} : { summary: summaries[message.style || "overview"], style: message.style, model: "deepseek-flash (UI fixture)" }) });
+        ...(message.type === "ask" ? { answer: `You asked: "${message.question}" (${message.history.length} earlier turns).\n\nThe article describes a **three-month** trial with **200 employees**. It reports:\n- less commuting and better work–life balance\n- more pressure to finish the same work in less time\n\nIt does not give productivity figures, so the overall effect on output is not stated in the article.`, model: "deepseek-flash (UI fixture)" }
+          : message.mode === "ocr" ? {} : { summary: summaries[message.style || "overview"], style: message.style, model: "deepseek-flash (UI fixture)" }) });
     }, Number(new URLSearchParams(location.search).get("delay")) || 250);
     return { ok: true, id: message.id };
   },

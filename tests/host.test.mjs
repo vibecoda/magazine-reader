@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSy
 import { endianness, tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { cleanText, deepseekKey, ENDPOINT, MODEL, STYLES, summarize, systemPrompt } from "../host/deepseek.mjs";
+import { ask, cleanText, cleanThread, deepseekKey, ENDPOINT, MODEL, STYLES, summarize, systemPrompt } from "../host/deepseek.mjs";
 import { handle } from "../host/host.mjs";
 import { decodeImage, recognize } from "../host/ocr.mjs";
 import { extensionId, HOST_NAME, ROOT } from "../host/paths.mjs";
@@ -72,6 +72,27 @@ test("each summary style shapes the prompt and output budget, and unknown styles
   assert.notEqual(seen.prose.messages[0].content, seen.detailed.messages[0].content);
   await assert.rejects(summarize("日本語", { style: "constructor", key: "test" }), /Unknown summary style/);
   await assert.rejects(handle({ id: "x", type: "summarize", text: "日本語", style: "poem" }, { archive: () => assert.fail("archived") }), /Unknown summary style/);
+});
+
+test("questions send the excerpt once, then earlier turns in order, and validate their inputs", async () => {
+  let body;
+  const result = await ask("記事の本文", { key: "test", question: " And the cost? ",
+    history: [{ question: "Who ran it?", answer: "A company." }], fetchImpl: async (_url, options) => {
+      body = JSON.parse(options.body);
+      return { ok: true, status: 200, json: async () => ({ choices: [{ finish_reason: "stop", message: { content: "Not stated." } }] }) };
+    } });
+  assert.equal(result.answer, "Not stated.");
+  assert.deepEqual(body.messages.map(m => m.role), ["system", "user", "assistant", "user"]);
+  assert.match(body.messages[0].content, /untrusted/);
+  assert.match(body.messages[1].content, /記事の本文[\s\S]*Question: Who ran it\?/);
+  assert.equal(body.messages[3].content, "And the cost?");
+  assert.equal(body.messages.filter(m => m.content.includes("記事の本文")).length, 1);
+  assert.throws(() => cleanThread({ question: " " }), /Type a question/);
+  assert.throws(() => cleanThread({ question: "x".repeat(2001) }), /under 2,000/);
+  assert.throws(() => cleanThread({ question: "q", history: Array(9).fill({ question: "q", answer: "a" }) }), /history/);
+  assert.throws(() => cleanThread({ question: "q", history: [{ question: "q", answer: 3 }] }), /history/);
+  await assert.rejects(ask("本文", { key: "test", question: "q", fetchImpl: async () => ({ ok: true, status: 200,
+    json: async () => ({ choices: [{ message: { content: "" } }] }) }) }), /empty answer/);
 });
 
 test("API failures have useful errors without relaying provider bodies or keys", async () => {

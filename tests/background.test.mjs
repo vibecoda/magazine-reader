@@ -125,3 +125,16 @@ test("native archive metadata comes from the capture, rather than overlay input"
   assert.equal(posted.source.capturedAt, saved.capturedAt);
   await f.ask({ type: "cancel", token: saved.token });
 });
+
+test("questions are bounded and forwarded with their history, never their overlay-supplied source", async () => {
+  const f = fixture(); await f.click(); const token = f.store["capture-1"].token;
+  assert.equal((await f.ask({ type: "ask", text: "本文", question: " ", token, id: "empty" })).ok, false);
+  assert.equal((await f.ask({ type: "ask", text: "本文", question: "x".repeat(2001), token, id: "long" })).ok, false);
+  assert.equal((await f.ask({ type: "ask", text: "本文", question: "q", history: Array(9).fill({}), token, id: "deep" })).ok, false);
+  const history = [{ question: "Who?", answer: "A firm." }];
+  assert.equal((await f.ask({ type: "ask", text: "本文", question: "Why?", history, token, id: "ok" })).ok, true);
+  const posted = f.ports[0].posted[0];
+  assert.deepEqual([posted.type, posted.text, posted.question, posted.history], ["ask", "本文", "Why?", history]);
+  assert.equal(posted.source.url, URL_READER);
+  await f.ask({ type: "cancel", token });
+});

@@ -91,3 +91,19 @@ test("the requested summary style reaches the LLM and is recorded in metadata", 
   const ocr = await handle({ id: "plain", type: "capture", mode: "ocr", image: "fixture", source }, { archive: f.archive, ocr: async () => "本文" });
   assert.equal(JSON.parse(readFileSync(join(ocr.archive.directory, "metadata.json"), "utf8")).style, null);
 });
+
+test("a question is archived with its context, question and answer, without touching summary styles", async t => {
+  const f = fixture(t);
+  let seen;
+  const result = await handle({ id: "q1", type: "ask", text: "本文", question: "What happened?", history: [], source }, {
+    archive: f.archive, llm: async () => assert.fail("summary called"),
+    asker: async (text, thread) => { seen = { text, ...thread }; return { answer: "A trial.", model: "test" }; },
+  });
+  assert.equal(seen.text, "本文"); assert.equal(seen.question, "What happened?");
+  assert.equal(result.answer, "A trial.");
+  assert.equal(readFileSync(result.archive.textPath, "utf8"), "本文");
+  assert.match(readFileSync(result.archive.summaryPath, "utf8"), /## Question\n\nWhat happened\?\n\n## Answer\n\nA trial\./);
+  const metadata = JSON.parse(readFileSync(join(result.archive.directory, "metadata.json"), "utf8"));
+  assert.equal(metadata.style, "ask"); assert.equal(metadata.requestType, "ask");
+  await assert.rejects(handle({ id: "q2", type: "ask", text: "本文", question: "" }, { archive: f.archive }), /Type a question/);
+});
