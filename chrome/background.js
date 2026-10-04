@@ -72,6 +72,9 @@ async function request(message, sender) {
     throw new Error("Invalid or oversized screenshot.");
   if (message.type === "summarize" && (typeof message.text !== "string" || !message.text.trim() || message.text.length > 60_000))
     throw new Error("Supply between 1 and 60,000 characters of OCR text.");
+  // The native host checks the exact style list; this only bounds what is forwarded.
+  if (message.style !== undefined && (typeof message.style !== "string" || !/^[a-z]{1,20}$/.test(message.style)))
+    throw new Error("Unknown summary style.");
   const id = message.id;
   const port = chrome.runtime.connectNative(HOST);
   const job = { id, port, timer: null };
@@ -97,7 +100,7 @@ async function request(message, sender) {
     finish();
   }, 130_000);
   try {
-    port.postMessage({ id, type: message.type,
+    port.postMessage({ id, type: message.type, style: message.style,
       source: { url: capture.url, capturedAt: capture.capturedAt, captureId: capture.token },
       ...(message.type === "capture"
       ? { image: message.image, mode: message.mode } : { text: message.text }) });

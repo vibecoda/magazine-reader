@@ -2,9 +2,20 @@
 const listeners = [];
 let fixtureTimer = null;
 const text = "ある企業は週四日の勤務制度を三か月間試験的に導入した。参加した社員は二百人。通勤時間が減り、仕事と生活の両立がしやすくなった一方、短い時間で同じ量の仕事を終える負担も報告された。";
-const summary = "A trial of a four-day working week\n\nA company tested a four-day week with **200 employees** over three months. The excerpt describes benefits alongside pressure to complete the same workload in less time.\n\nKey points\n• Employees reported less commuting and an easier balance between work and home life.\n• Some employees experienced a heavier workload within the shorter schedule.\n• The trial does not establish that the arrangement suits every company.\n\nLimitations\nThe excerpt provides no detailed productivity measurements.";
+const summaries = {
+  overview: "A trial of a four-day working week\n\nA company tested a four-day week with **200 employees** over three months. The excerpt describes benefits alongside pressure to complete the same workload in less time.\n\nKey points\n• Employees reported less commuting and an easier balance between work and home life.\n• Some employees experienced a heavier workload within the shorter schedule.\n• The trial does not establish that the arrangement suits every company.\n\nLimitations\nThe excerpt provides no detailed productivity measurements.",
+  bullets: "Four-day week trial\n\n• A company trialled a four-day week with **200 employees** for three months.\n• Staff reported less commuting and better work–life balance.\n• Some felt more pressure to finish the same work in less time.\n• The results do not show it suits every company.",
+  prose: "A trial of a four-day working week\n\nA company introduced a four-day working week on a trial basis for three months, involving **200 employees**. According to the survey, commuting time fell and participants found it easier to balance work and private life.\n\nAt the same time, some employees felt a heavier burden because they had to finish the same amount of work in less time. The article cautions that these results alone cannot show that the same system would suit every company.",
+  detailed: "A trial of a four-day working week\n\nA three-month company trial of a four-day week produced mixed but mostly positive reports.\n\n## The trial\n• Introduced on a trial basis by one company.\n• **200 employees** took part over **three months**.\n\n## Reported benefits\n• Less time spent commuting.\n• An easier balance between work and private life.\n\n## Reported drawbacks\n• Pressure to finish the same workload in fewer hours.\n\n## Conclusion\n• The article says the results do not prove the system suits all companies.",
+  translation: "New ways of working at companies\n\nOne company introduced a four-day working week on a trial basis. Two hundred employees took part, and the trial ran for three months.\n\nIn a survey, participants reported that commuting time decreased and that it became easier to balance work and private life.\n\nOn the other hand, some employees felt their burden had increased, because they needed to finish the same amount of work in a shorter time.\n\nFrom these results alone, it cannot be concluded that the same system is suitable for every company.",
+  glossary: "New ways of working\n\nA company's three-month trial of a four-day week brought less commuting but more time pressure.\n\nVocabulary\n• 勤務制度 (きんむせいど) — working-hours system\n• 試験的に (しけんてきに) — on a trial basis\n• 導入する (どうにゅうする) — to introduce, adopt\n• 通勤時間 (つうきんじかん) — commuting time\n• 両立 (りょうりつ) — balancing two things at once\n• 負担 (ふたん) — burden, load\n• 判断する (はんだんする) — to judge, conclude",
+};
 const deliver = message => new Promise(resolve => listeners[0]({ channel: "magazine-reader", ...message }, {}, resolve));
-window.chrome = { runtime: {
+const storage = { local: {
+  get: async key => { try { return { [key]: JSON.parse(localStorage.getItem(`fixture-${key}`)) }; } catch { return {}; } },
+  set: async values => { for (const [key, value] of Object.entries(values)) localStorage.setItem(`fixture-${key}`, JSON.stringify(value)); },
+} };
+window.chrome = { storage, runtime: {
   onMessage: { addListener: fn => listeners.push(fn) },
   sendMessage: async message => {
     if (message.type === "cancel") { clearTimeout(fixtureTimer); return { ok: true }; }
@@ -19,7 +30,7 @@ window.chrome = { runtime: {
         archive: { directory: "/synthetic-preview/archive", textPath: "/synthetic-preview/archive/ocr.txt",
           summaryPath: message.mode === "ocr" ? null : "/synthetic-preview/archive/summary.md" },
         text: message.type === "capture" ? text : message.text,
-        ...(message.mode === "ocr" ? {} : { summary, model: "deepseek-flash (UI fixture)" }) });
+        ...(message.mode === "ocr" ? {} : { summary: summaries[message.style || "overview"], style: message.style, model: "deepseek-flash (UI fixture)" }) });
     }, Number(new URLSearchParams(location.search).get("delay")) || 250);
     return { ok: true, id: message.id };
   },

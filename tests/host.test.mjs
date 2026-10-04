@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSy
 import { endianness, tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { cleanText, deepseekKey, ENDPOINT, MODEL, summarize } from "../host/deepseek.mjs";
+import { cleanText, deepseekKey, ENDPOINT, MODEL, STYLES, summarize, systemPrompt } from "../host/deepseek.mjs";
 import { handle } from "../host/host.mjs";
 import { decodeImage, recognize } from "../host/ocr.mjs";
 import { extensionId, HOST_NAME, ROOT } from "../host/paths.mjs";
@@ -54,6 +54,24 @@ test("summary sends only text to the fixed DeepSeek endpoint with thinking off",
     return { ok: true, status: 200, json: async () => ({ choices: [{ finish_reason: "stop", message: { content: "English summary" } }] }) };
   } });
   assert.equal(result.summary, "English summary"); assert.equal(result.truncated, false);
+});
+
+test("each summary style shapes the prompt and output budget, and unknown styles are rejected", async () => {
+  const seen = {};
+  for (const style of Object.keys(STYLES)) {
+    const result = await summarize("日本語", { style, key: "test", fetchImpl: async (_url, options) => {
+      seen[style] = JSON.parse(options.body);
+      return { ok: true, status: 200, json: async () => ({ choices: [{ finish_reason: "stop", message: { content: "Out" } }] }) };
+    } });
+    assert.equal(result.style, style);
+    assert.equal(seen[style].max_tokens, STYLES[style].tokens);
+    assert.match(seen[style].messages[0].content, /untrusted/);
+  }
+  assert.match(systemPrompt("translation"), /^Translate/);
+  assert.match(systemPrompt("bullets"), /3–5 concise/);
+  assert.notEqual(seen.prose.messages[0].content, seen.detailed.messages[0].content);
+  await assert.rejects(summarize("日本語", { style: "constructor", key: "test" }), /Unknown summary style/);
+  await assert.rejects(handle({ id: "x", type: "summarize", text: "日本語", style: "poem" }, { archive: () => assert.fail("archived") }), /Unknown summary style/);
 });
 
 test("API failures have useful errors without relaying provider bodies or keys", async () => {

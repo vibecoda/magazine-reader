@@ -63,3 +63,13 @@ test("copy leaves an earlier note section intact when another substantive sectio
   const text = "Title\n\nNote\nAn earlier note.\n\n## Main points\n• A substantive point.";
   assert.equal(copyText(text), text);
 });
+
+test("style-specific section labels such as Vocabulary become headings", () => {
+  assert.deepEqual(parse("New ways of working\n\nA short gist.\n\nVocabulary\n• 両立 (りょうりつ) — balance\n• 負担 (ふたん) — burden"), [
+    { type: "title", text: "New ways of working" },
+    { type: "paragraph", text: "A short gist." },
+    { type: "heading", text: "Vocabulary" },
+    { type: "list", ordered: false, items: ["両立 (りょうりつ) — balance", "負担 (ふたん) — burden"] },
+  ]);
+  assert.equal(copyText("Title\n\nGlossary:\n• 語 — word\n\nLimitations: Partial."), "Title\n\nGlossary:\n• 語 — word");
+});

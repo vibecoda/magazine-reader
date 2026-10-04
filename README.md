@@ -1,4 +1,4 @@
-# Magazine Reader · 0.2.0
+# Magazine Reader · 0.3.0
 
 A small Chrome extension for the Rakuten Magazine web reader. Click the extension,
 select a region of the visible spread, and read an English summary in an overlay.
@@ -42,24 +42,41 @@ editing its JavaScript.
    text is readable. Exit the reader's fullscreen mode before capturing.
 2. Click **Magazine Reader**. The overlay shows a frozen screenshot of the spread.
    Controls sit in a narrow bar at the right edge, leaving the center clear.
-   **Move to left/right** switches sides; the summary uses the same side.
+   **Move to left/right** switches that bar's side. Pick a **Summary style** there.
 3. Drag around a page, article, or text column. **Whole viewport** selects everything
    visible; this also includes reader controls and margins.
 4. **Summarize selection** performs OCR locally, then sends the transcript to DeepSeek.
    **OCR only** stops after recognition and sends nothing to DeepSeek.
-5. The results open in a wider reading panel after OCR or summarization completes.
-   **Expand / Collapse** changes the width at any time, and a manual choice is
-   respected when processing finishes. New captures start with the compact strip.
-   English summaries have a clear title, spacious paragraphs and bullets, and
-   highlighted limitations; Japanese text and the captured image sit in drawers.
-6. Review or edit **Japanese text**, then **Summarize text** to retry with corrections.
-   **Copy summary** copies the title and main summary without its final limitations
-   or disclaimer note. The full summary remains visible and saved in the archive.
-   **Cancel**, close, and Escape are available in the overlay.
-7. Turn to the next magazine page, then click **New capture** in the panel. This
-   cancels any current processing, hides the overlay before taking a fresh
-   screenshot, and returns to the compact selection strip. It also works when
-   the previous capture has expired. The saved files remain on disk.
+5. Results open in a **centered reader** over a dimmed page, with a loading
+   placeholder while OCR and DeepSeek run. Tabs across the top switch style:
+
+   | Tab | Output |
+   |---|---|
+   | Key points | A title and 3–5 one-sentence bullets |
+   | Overview | An overview paragraph plus 3–6 key points (default) |
+   | Prose | A literal summary in flowing paragraphs, in the article's order |
+   | Detailed | Section-by-section headings and bullets, keeping figures and quotes |
+   | Translation | A full English translation rather than a summary |
+   | Vocabulary | The gist plus 8–15 Japanese words with readings and meanings |
+
+   Choosing a tab you haven't generated yet sends the same OCR text again in that
+   style; generated styles are kept for the capture (marked with a dot) and switch
+   instantly. **Regenerate** asks for a fresh version of the current style.
+6. **Aa** opens reading settings: typeface (serif, sans, humanist, mono), text size,
+   line spacing, width, theme (paper, sepia, night), position (centered, or docked
+   left/right so the magazine stays usable), and ragged or justified alignment.
+   Settings and the last style are remembered in `chrome.storage.local`.
+   Keys while the reader has focus: `+` / `-` text size, `1`–`6` style, Escape
+   closes settings, then the reader. A thin bar under the header shows reading progress.
+   Review or edit **Japanese text**, then **Summarize** / **Regenerate** to retry with
+   corrections. **Copy** copies the title and main text without its final
+   limitations or disclaimer note. The full output remains visible and saved.
+7. Click **New capture** (in the reader or the selection bar). The overlay steps
+   aside to a small bar so you can turn the magazine page with its normal controls
+   and keys. Click **Capture page** when ready: this hides the bar, takes a fresh
+   screenshot, and opens region selection. **Back** returns to the last result.
+   Any running request is cancelled. It also works when the previous capture has
+   expired, and the saved files remain on disk.
 
 After changing extension code, reload it at `chrome://extensions` and refresh the
 Rakuten reader tab so the updated overlay is injected.
@@ -76,7 +93,7 @@ Every OCR / summary request is archived automatically under
 
 - `ocr.txt`: recognized Japanese text, or the edited transcript submitted for a retry.
 - `summary.md`: English summary, when the LLM call succeeds.
-- `metadata.json`: request ID, capture URL/time/ID, save time, and summary model/status.
+- `metadata.json`: request ID, capture URL/time/ID, save time, summary style, and model/status.
 
 OCR is written **before** calling DeepSeek, so a failed or cancelled summary still
 leaves the transcript on disk. Each retry creates a new folder and preserves the
@@ -91,13 +108,15 @@ Screenshots are not archived. If local saving fails, the panel reports the error
 - `nativeMessaging`: connect to this Mac's OCR / summary host. No localhost web
   service, remote debugging, or browser cookies are needed.
 - `storage`: short-lived capture metadata in Chrome's session storage so region
-  selection survives service-worker suspension. Images and text are not stored there.
+  selection survives service-worker suspension, plus reading settings in local
+  storage. Images and text are not stored there.
 
 The host uses a private temporary PNG and deletes it after OCR, including on errors.
 The screenshot never goes to DeepSeek. Only the transcript goes to
 `https://api.deepseek.com/chat/completions`, using `deepseek-flash` with thinking
-disabled. Normal DeepSeek API billing applies. There is no automatic provider
-fallback, automatic retry, or logging of keys / article text. In-memory images and
+disabled. Each style has its own output budget; Detailed and Translation allow
+longer answers and wait up to 90 seconds. Normal DeepSeek API billing applies.
+There is no automatic provider fallback, automatic retry, or logging of keys / article text. In-memory images and
 text are released when the reader tab is unloaded; saved archives remain on disk.
 Use within the permissions granted by your content provider.
 

@@ -1,6 +1,7 @@
 /* Shared by the content script and its UI fixture. No HTML is parsed. */
 (() => {
   const noteLabel = /^(limitations(?: note)?|disclaimer|caveats|uncertainties|limits of (?:this|the) excerpt|note)$/i;
+  const sectionLabel = /^(overview|key points|main points|summary|vocabulary|key vocabulary|glossary|key terms)$/i;
   const plainLine = line => line.trim().replace(/^#{1,6}\s+/, "").replace(/^\*\*(.+?)\*\*/, "$1");
   const noteLine = line => noteLabel.test(plainLine(line).split(":", 1)[0].trim());
   function copyText(text) {
@@ -9,7 +10,7 @@
     for (let index = lines.length - 1; index >= 0; index--) {
       const line = lines[index];
       if (noteLine(line)) return lines.slice(0, index).join("\n").trimEnd();
-      if (/^#{1,6}\s+/.test(line.trim()) || /^(overview|key points|main points):?$/i.test(plainLine(line))) break;
+      if (/^#{1,6}\s+/.test(line.trim()) || sectionLabel.test(plainLine(line).replace(/:$/, ""))) break;
     }
     // Older summaries sometimes ended with an unlabelled, standalone disclaimer.
     const paragraphs = lines.join("\n").split(/\n\s*\n/);
@@ -41,7 +42,7 @@
       const inlineNote = colon >= 0 && noteLabel.test(normalized.slice(0, colon).trim()) ? normalized.slice(colon + 1).trim() : "";
       if (inlineNote) { flush(); note = true; paragraph.push(inlineNote); continue; }
       const plain = line.replace(/^#{1,6}\s+/, "").replace(/^\*\*(.*?)\*\*:?$/, "$1").replace(/:$/, "");
-      const section = /^(overview|key points|main points)$/i.test(plain) || noteLabel.test(plain);
+      const section = sectionLabel.test(plain) || noteLabel.test(plain);
       if (/^#{1,6}\s/.test(line) || section) {
         flush(); note = noteLabel.test(plain);
         if (!note) blocks.push({ type: blocks.length ? "heading" : "title", text: plain });

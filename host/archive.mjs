@@ -24,7 +24,8 @@ export function createArchive(message, { root = ARCHIVE_DIR, now = new Date() } 
   const textPath = join(directory, "ocr.txt"), summaryPath = join(directory, "summary.md");
   const metadataPath = join(directory, "metadata.json");
   const metadata = { version: 1, requestId: message.id, savedAt: timestamp,
-    requestType: message.type, mode: message.mode || "summary", source: sourceMetadata(message.source),
+    requestType: message.type, mode: message.mode || "summary",
+    style: message.mode === "ocr" ? null : message.style || null, source: sourceMetadata(message.source),
     textFile: "ocr.txt", summaryFile: null };
   const writeMetadata = () => {
     const temporary = join(directory, `.metadata-${randomUUID()}.tmp`);

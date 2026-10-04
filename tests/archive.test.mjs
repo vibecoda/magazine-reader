@@ -79,3 +79,15 @@ test("archive failures are actionable and prevent an unsaved input from reaching
   }), /Could not save OCR locally/);
   assert.equal(called, false);
 });
+
+test("the requested summary style reaches the LLM and is recorded in metadata", async t => {
+  const f = fixture(t);
+  let style;
+  const result = await handle({ id: "styled", type: "summarize", text: "本文", style: "translation", source }, {
+    archive: f.archive, llm: async (_text, options) => { style = options.style; return { summary: "English", model: "test" }; },
+  });
+  assert.equal(style, "translation");
+  assert.equal(JSON.parse(readFileSync(join(result.archive.directory, "metadata.json"), "utf8")).style, "translation");
+  const ocr = await handle({ id: "plain", type: "capture", mode: "ocr", image: "fixture", source }, { archive: f.archive, ocr: async () => "本文" });
+  assert.equal(JSON.parse(readFileSync(join(ocr.archive.directory, "metadata.json"), "utf8")).style, null);
+});

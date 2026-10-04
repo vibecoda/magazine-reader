@@ -1,6 +1,6 @@
 /** stdout is exclusively Chrome's framed JSON channel; no document or key logging. */
 import { fileURLToPath } from "node:url";
-import { cleanText, summarize } from "./deepseek.mjs";
+import { cleanText, DEFAULT_STYLE, STYLES, summarize } from "./deepseek.mjs";
 import { createArchive } from "./archive.mjs";
 import { recognize } from "./ocr.mjs";
 import { extensionId } from "./paths.mjs";
@@ -9,6 +9,8 @@ import { decodeMessages, encodeMessage, MAX_INPUT } from "./protocol.mjs";
 export async function handle(message, { emit = () => {}, ocr = recognize, llm = summarize, archive = createArchive, signal } = {}) {
   if (!message || typeof message.id !== "string" || !/^[a-zA-Z0-9-]{1,80}$/.test(message.id)) throw new Error("Invalid request ID.");
   if (message.type !== "summarize" && (message.type !== "capture" || !["ocr", "summary"].includes(message.mode))) throw new Error("Unknown request.");
+  const style = message.style ?? DEFAULT_STYLE;
+  if (!Object.hasOwn(STYLES, style)) throw new Error("Unknown summary style.");
   let text = message.text;
   if (message.type === "capture") {
     emit({ id: message.id, stage: "recognizing" });
@@ -17,12 +19,12 @@ export async function handle(message, { emit = () => {}, ocr = recognize, llm = 
   }
   text = cleanText(text);
   let saved;
-  try { saved = archive({ ...message, text, image: undefined }); }
+  try { saved = archive({ ...message, style, text, image: undefined }); }
   catch { throw new Error("Could not save OCR locally. Check dot_home/data/magazine-reader permissions and disk space."); }
   emit({ id: message.id, stage: "archived", archive: saved.info, text });
   if (message.type === "capture" && message.mode === "ocr") return { text, archive: saved.info };
   emit({ id: message.id, stage: "summarizing" });
-  const result = await llm(text, { signal });
+  const result = await llm(text, { style, signal });
   try { saved.complete(result); }
   catch { throw new Error("The summary could not be saved locally. OCR is saved; check disk space and try again."); }
   return { text, ...result, archive: saved.info };
