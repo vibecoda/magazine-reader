@@ -77,7 +77,14 @@
     const clean = code.replace(/[*`[\]]/g, "").toUpperCase();
     return { code: stockCode.test(clean) ? clean : null, ja, en, source, note: rest.join(" | ") };
   }
+  /** One "語句 | reading | meaning" bullet from the vocabulary style (or the older "語句 (reading) — meaning"), or null. */
+  function term(item) {
+    const parts = String(item).split("|").map(part => part.trim().replace(/^\*\*(.*)\*\*$/, "$1"));
+    if (parts.length >= 3 && parts[0] && parts.at(-1)) return { term: parts[0], reading: parts[1], meaning: parts.slice(2).join(" | ") };
+    const older = String(item).match(/^(.+?)\s*[(（]([^)）]+)[)）]\s*[—–-]\s*(.+)$/);
+    return older ? { term: older[1].trim(), reading: older[2].trim(), meaning: older[3].trim() } : null;
+  }
   const stockUrl = code => stockCode.test(code)
     ? `https://monex.ifis.co.jp/index.php?sa=find&ta=n&wd=${encodeURIComponent(code)}` : null;
-  globalThis.magazineSummary = { parse, inline, copyText, stock, stockUrl };
+  globalThis.magazineSummary = { parse, inline, copyText, stock, stockUrl, term };
 })();

@@ -100,7 +100,7 @@ The host looks for a key in this order and uses the first it finds:
    | Prose | A literal summary in flowing paragraphs, in the article's order |
    | Detailed | Section-by-section headings and bullets, keeping figures and quotes |
    | Translation | A full English translation rather than a summary |
-   | Vocabulary | The gist plus 8–15 Japanese words with readings and meanings |
+   | Vocabulary | 10–25 Japanese words and phrases, each with its reading and meaning |
    | Stocks | Each company named, with its Tokyo securities code linked to Monex |
    | Ask | A conversation: ask DeepSeek anything about the page |
 

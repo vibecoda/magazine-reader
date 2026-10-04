@@ -10,7 +10,7 @@
     prose: ["Prose", "A literal summary in flowing paragraphs", "English summary"],
     detailed: ["Detailed", "Section-by-section notes with figures and quotes", "Detailed notes"],
     translation: ["Translation", "A full English translation, not a summary", "English translation"],
-    glossary: ["Vocabulary", "The gist plus a Japanese word list", "Gist and vocabulary"],
+    glossary: ["Vocabulary", "Japanese words with readings and meanings", "Vocabulary"],
     stocks: ["Stocks", "Companies and securities codes, linked to Monex", "Stocks mentioned"],
   };
   // The Ask tab is a conversation about the page rather than a summary style.
@@ -115,6 +115,9 @@
     .ask-input{margin:0;height:auto;min-height:44px;max-height:180px;resize:none;font-family:system-ui,-apple-system,"Hiragino Sans",sans-serif;font-size:15px;line-height:1.5;padding:10px 12px}
     .ask-send{flex:none;height:44px;padding:0 18px;background:var(--primary);color:var(--primary-fg)}
     .composer-foot{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--muted);padding-bottom:4px}
+    .summary ul.vocab{list-style:none;padding:0;margin:0 0 1.4em}.summary ul.vocab li{display:grid;grid-template-columns:minmax(7em,30%) 1fr;gap:.3em 1.2em;align-items:baseline;padding:.65em 0;margin:0;border-bottom:1px solid var(--line)}
+    .vocab-word{display:flex;flex-direction:column;min-width:0}.vocab-term{font:500 1.15em/1.35 "Hiragino Mincho ProN","Hiragino Sans",serif;color:var(--heading)}.vocab-reading{font-size:.72em;color:var(--muted);letter-spacing:.04em}
+    .vocab-meaning{line-height:1.45}@media(max-width:600px){.summary ul.vocab li{grid-template-columns:1fr}}
     .summary ul.stocks{list-style:none;padding:0;margin:.6em 0 1.4em}.summary li.stock{display:flex;gap:.9em;align-items:flex-start;padding:.7em 0;margin:0;border-bottom:1px solid var(--line)}
     .ticker{flex:none;min-width:4.6em;text-align:center;font:650 .8em/1 "SF Mono",Menlo,monospace;letter-spacing:.04em;padding:.55em .5em;margin-top:.15em;border-radius:7px;background:var(--primary);color:var(--primary-fg);text-decoration:none}
     a.ticker:hover{filter:brightness(1.12)}a.ticker:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.ticker.none{background:var(--surface);color:var(--muted)}
@@ -294,12 +297,23 @@
     }
   };
   /** Renders model text as DOM; nothing is parsed as HTML. */
-  function renderBlocks(target, text, { stocks = false, lead = true } = {}) {
+  function renderBlocks(target, text, { stocks = false, vocabulary = false, lead = true } = {}) {
     let firstParagraph = lead;
     for (const block of globalThis.magazineSummary.parse(text)) {
       if (block.type === "list" && stocks && block.items.every(item => globalThis.magazineSummary.stock(item))) {
         const list = node("ul", "stocks");
         for (const item of block.items) list.append(stockRow(globalThis.magazineSummary.stock(item)));
+        target.append(list); continue;
+      }
+      if (block.type === "list" && vocabulary && block.items.every(item => globalThis.magazineSummary.term(item))) {
+        const list = node("ul", "vocab");
+        for (const item of block.items) {
+          const { term, reading, meaning } = globalThis.magazineSummary.term(item), li = node("li");
+          const word = node("div", "vocab-word"), ja = node("span", "vocab-term", term); ja.lang = "ja"; word.append(ja);
+          if (reading) { const kana = node("span", "vocab-reading", reading); kana.lang = "ja"; word.append(kana); }
+          const gloss = node("div", "vocab-meaning"); appendInline(gloss, meaning);
+          li.append(word, gloss); list.append(li);
+        }
         target.append(list); continue;
       }
       if (block.type === "list") {
@@ -339,11 +353,12 @@
     if (activeStyle === "ask") { summaryNode.replaceChildren(); renderThread(); return; }
     const entry = current(), text = entry?.text || "";
     summaryNode.replaceChildren();
-    renderBlocks(summaryNode, text, { stocks: activeStyle === "stocks" });
+    renderBlocks(summaryNode, text, { stocks: activeStyle === "stocks", vocabulary: activeStyle === "glossary" });
     const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+    const terms = summaryNode.querySelectorAll(".vocab li").length;
     readingLabel.hidden = !text;
-    readingLabel.replaceChildren(node("span", "", `${STYLES[activeStyle][2]} · ${Math.max(1, Math.ceil(words / 200))} min read`),
-      node("span", "", entry && entry.source !== ocrText ? "Japanese text edited since" : `${words} words`));
+    readingLabel.replaceChildren(node("span", "", terms ? `${STYLES[activeStyle][2]} · ${terms} terms` : `${STYLES[activeStyle][2]} · ${Math.max(1, Math.ceil(words / 200))} min read`),
+      node("span", "", entry && entry.source !== ocrText ? "Japanese text edited since" : terms ? "" : `${words} words`));
     summaryNode.parentElement.scrollTop = 0;
   }
   function stockRow(row) {
@@ -466,7 +481,11 @@
       const entry = current();
       const text = activeStyle === "ask"
         ? thread.filter(turn => turn.answer).map(turn => `Q: ${turn.question}\n\n${turn.answer}`).join("\n\n---\n\n")
-        : entry && globalThis.magazineSummary.copyText(entry.text);
+        : entry && globalThis.magazineSummary.copyText(entry.text).split("\n").map(line => {
+          // Copy vocabulary as "語句 (reading) — meaning" rather than the pipe format.
+          const row = activeStyle === "glossary" && line.match(/^[-*•]\s+(.+)$/) && globalThis.magazineSummary.term(line.replace(/^[-*•]\s+/, ""));
+          return row ? `- ${row.term}${row.reading ? ` (${row.reading})` : ""} — ${row.meaning}` : line;
+        }).join("\n");
       if (!text) return;
       try {
         await navigator.clipboard.writeText(text); event.target.textContent = "Copied";

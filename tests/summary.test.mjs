@@ -86,3 +86,13 @@ test("stock bullets parse codes, names and provenance; only valid codes get a Mo
   assert.deepEqual(parse("Title\n\nStocks\n- 7203 | トヨタ | Toyota | stated | x\n\nOther companies\n- ---- | 某社 | Firm | stated | y")
     .map(block => block.type), ["title", "heading", "list", "heading", "list"]);
 });
+
+test("vocabulary bullets parse the pipe format and the older dash format, and reject other bullets", () => {
+  const { term } = context.magazineSummary;
+  assert.deepEqual({ ...term("両立 | りょうりつ | balancing two things | at once") },
+    { term: "両立", reading: "りょうりつ", meaning: "balancing two things | at once" });
+  assert.deepEqual({ ...term("**負担** | ふたん | burden") }, { term: "負担", reading: "ふたん", meaning: "burden" });
+  assert.deepEqual({ ...term("通勤時間（つうきんじかん）— commuting time") }, { term: "通勤時間", reading: "つうきんじかん", meaning: "commuting time" });
+  assert.equal(term("Employees reported less commuting."), null);
+  assert.deepEqual(parse("- 両立 | りょうりつ | balance\n- 負担 | ふたん | burden").map(block => block.type), ["list"]);
+});

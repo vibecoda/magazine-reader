@@ -20,9 +20,12 @@ followed by bullet points. Keep supporting figures, quotes, and examples.` },
   translation: { tokens: 4000, task: "Translate", shape: `Translate the excerpt fully and faithfully into natural English instead
 of summarizing it. Start with a short title (the article's own headline, translated, if present), then
 the translation in paragraphs that follow the original order. Mark unreadable passages as [unclear].` },
-  glossary: { tokens: 2000, task: "Summarize", shape: `Start with a short descriptive title and a one-sentence gist. Then add a
-heading "Vocabulary" with 8–15 bullet points of useful or difficult Japanese words and phrases from the
-excerpt, each formatted as: 語句 (hiragana reading) — English meaning in this context.` },
+  glossary: { tokens: 2500, task: "Build a vocabulary list in English from", shape: `Output only a word list: no title, summary, or
+introduction. List 10–25 useful or difficult Japanese words and phrases from the excerpt, in the order they
+first appear, one bullet each, in exactly this format:
+- 語句 | hiragana reading | English meaning as used in this excerpt
+Prefer content words, idioms, and set phrases; skip very common words such as する or 日本. Include a name
+only when its reading is not obvious. Keep each meaning short, a few words to one clause.` },
   stocks: { tokens: 2000, task: "List the companies and stocks named in", shape: `Start with a short descriptive title and a
 one-sentence gist. Then add a heading "Stocks" listing every Tokyo-listed company the excerpt mentions,
 one bullet each, in exactly this format:
