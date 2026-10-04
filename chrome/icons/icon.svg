@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- Magazine Reader: an open magazine with vertical Japanese lines, crop corners, and a spark. -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#24473c"/><stop offset="1" stop-color="#17302a"/>
+    </linearGradient>
+    <linearGradient id="left" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#fbf8ee"/><stop offset="1" stop-color="#e4dfcd"/>
+    </linearGradient>
+    <linearGradient id="right" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#e9e4d2"/><stop offset="1" stop-color="#fbf8ee"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="url(#tile)"/>
+  <rect x="5" y="5" width="118" height="118" rx="27" fill="none" stroke="#c6ee98" stroke-opacity=".18" stroke-width="2"/>
+  <!-- crop corners; the spark takes the top-right one -->
+  <g fill="none" stroke="#c6ee98" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20 38V24h14"/><path d="M108 90v14H94"/><path d="M34 104H20V90"/>
+  </g>
+  <!-- open magazine -->
+  <path d="M33 40c10-3 20-2 29 3v51c-9-5-19-6-29-3z" fill="url(#left)"/>
+  <path d="M95 40c-10-3-20-2-29 3v51c9-5 19-6 29-3z" fill="url(#right)"/>
+  <path d="M64 44v50" stroke="#132720" stroke-opacity=".35" stroke-width="2"/>
+  <!-- vertical Japanese text columns on the right page, a headline on the left -->
+  <g stroke="#3d6152" stroke-width="3.2" stroke-linecap="round">
+    <path d="M87 50v30"/><path d="M80 50v34"/><path d="M73 52v26"/>
+    <path d="M40 52h15" stroke="#7a9a5c" stroke-width="4.5"/><path d="M40 61h15"/><path d="M40 69h11"/>
+  </g>
+  <!-- AI spark -->
+  <path d="M101 15c1.8 8 5 11.2 13 13-8 1.8-11.2 5-13 13-1.8-8-5-11.2-13-13 8-1.8 11.2-5 13-13z" fill="#c6ee98"/>
+  <circle cx="114" cy="40" r="2.6" fill="#c6ee98" opacity=".75"/>
+</svg>

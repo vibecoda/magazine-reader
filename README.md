@@ -1,4 +1,4 @@
-# Magazine Reader · 0.5.0
+# Magazine Reader · 0.5.1
 
 A small Chrome extension for the Rakuten Magazine web reader. Click the extension,
 select a region of the visible spread, and read an English summary in an overlay.
@@ -143,6 +143,17 @@ OCR and incomplete excerpts; it cannot restore missing content reliably.
 Summary output is bounded, timeouts are explicit, and the native protocol caps
 input/output sizes. Provider errors never relay raw API response bodies. Displayed
 OCR and summary text are rendered as text inside a closed shadow root, not HTML.
+
+## Icon
+
+`chrome/icons/icon.svg` is the source for the 32/48/128 px PNGs; `icon-16.svg` is a
+simplified toolbar version (magazine and two crop corners). After editing, re-render:
+
+```bash
+cd utils/magazine-reader/chrome/icons
+for n in 32 48 128; do rsvg-convert -w $n -h $n icon.svg -o icon-$n.png; done
+rsvg-convert -w 16 -h 16 icon-16.svg -o icon-16.png
+```
 
 ## Checks
 
