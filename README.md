@@ -3,7 +3,7 @@
 A small Chrome extension for the Rakuten Magazine web reader. Click the extension,
 select a region of the visible spread, and read an English summary in an overlay.
 It follows the native messaging / direct DeepSeek design in
-`anki/extension/`, with **no npm dependencies, aichat, or LLM SDK**.
+the sibling `anki` repo's `extension/`, with **no npm dependencies, aichat, or LLM SDK**.
 
 ```
 extension button → visible-tab PNG → region selection → native host
@@ -13,25 +13,26 @@ extension button → visible-tab PNG → region selection → native host
 
 ## Setup on this Mac
 
-Requires Node 22+ and the existing `ocr` binary from `utils/japanese_ocr/ocr.swift`.
+Requires Node 22+ and the existing `ocr` binary built from `dot_home/utils/japanese_ocr/ocr.swift`.
 The key lookup matches Kotoba Reader: `DEEPSEEK_API_KEY` from the host's environment,
 then `~/.env2`. The native host reads that file without executing it. No key is
 copied into the extension or repository. The current shell's exported variables
 are not automatically inherited by Chrome: use `~/.env2` for that setup.
 
-From `dot_home`:
+From this repository (`~/dev/gitlab/magazine-reader`):
 
 ```bash
-node utils/magazine-reader/host/install.mjs --check
-node utils/magazine-reader/host/install.mjs
+node host/install.mjs --check
+node host/install.mjs
 # If ocr is not on PATH:
-# node utils/magazine-reader/host/install.mjs --ocr "$HOME/.local/bin/ocr"
+# node host/install.mjs --ocr "$HOME/.local/bin/ocr"
 ```
 
 In Chrome, open `chrome://extensions`, enable Developer mode, and **Load unpacked**
-from `utils/magazine-reader/chrome`. The public manifest key pins the extension ID
+from this repository's `chrome/` folder. The public manifest key pins the extension ID
 to `bchilcmoklaelegfndjimjmibgkddehd`. Pin its toolbar button if desired.
-The installer registers `com.dot_home.magazine_reader` for only that extension;
+The installer registers `com.dot_home.magazine_reader` (a name kept from when this
+lived in dot_home) for only that extension;
 it does not change Kotoba Reader. Re-run it after moving the repository or
 upgrading Node / relocating the OCR executable, and reload the extension after
 editing its JavaScript.
@@ -101,7 +102,7 @@ fails. Closing/cancelling disconnects the native host and aborts its pending wor
 ## Data and permissions
 
 Every OCR / summary request is archived automatically under
-`dot_home/data/magazine-reader/YYYY-MM-DD/<time>-<unique-id>/` (UTC dates):
+`data/YYYY-MM-DD/<time>-<unique-id>/` in this repository (UTC dates):
 
 - `ocr.txt`: recognized Japanese text, or the edited transcript submitted for a retry.
 - `summary.md`: English summary, or for **Ask** the question and answer, when the LLM call succeeds.
@@ -150,7 +151,7 @@ OCR and summary text are rendered as text inside a closed shadow root, not HTML.
 simplified toolbar version (magazine and two crop corners). After editing, re-render:
 
 ```bash
-cd utils/magazine-reader/chrome/icons
+cd chrome/icons
 for n in 32 48 128; do rsvg-convert -w $n -h $n icon.svg -o icon-$n.png; done
 rsvg-convert -w 16 -h 16 icon-16.svg -o icon-16.png
 ```
@@ -158,10 +159,10 @@ rsvg-convert -w 16 -h 16 icon-16.svg -o icon-16.png
 ## Checks
 
 ```bash
-node --test utils/magazine-reader/tests/*.test.mjs
-node --check utils/magazine-reader/chrome/content.js
-node --check utils/magazine-reader/chrome/background.js
-node utils/magazine-reader/host/check-image.mjs /path/to/small-test.png
+node --test tests/*.test.mjs
+node --check chrome/content.js
+node --check chrome/background.js
+node host/check-image.mjs /path/to/small-test.png
 # Include --summarize to also send the recognized text to DeepSeek.
 ```
 

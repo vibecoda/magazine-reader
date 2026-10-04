@@ -21,7 +21,7 @@ export async function handle(message, { emit = () => {}, ocr = recognize, llm = 
   text = cleanText(text);
   let saved;
   try { saved = archive({ id: message.id, type: message.type, mode: message.mode, source: message.source, style, text }); }
-  catch { throw new Error("Could not save OCR locally. Check dot_home/data/magazine-reader permissions and disk space."); }
+  catch { throw new Error("Could not save OCR locally. Check the magazine-reader data/ folder permissions and disk space."); }
   emit({ id: message.id, stage: "archived", archive: saved.info, text });
   if (message.type === "capture" && message.mode === "ocr") return { text, archive: saved.info };
   if (thread) {

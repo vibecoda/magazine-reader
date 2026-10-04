@@ -95,7 +95,7 @@ async function request(message, sender) {
     jobs.delete(tabId); clearTimeout(job.timer);
     const missing = /not found|forbidden/i.test(failure?.message || "");
     void deliver({ id, done: true, ok: false, error: missing
-      ? "Install the Magazine Reader native host: node utils/magazine-reader/host/install.mjs"
+      ? "Install the Magazine Reader native host: node host/install.mjs in the magazine-reader repo"
       : "The native host stopped. Check the OCR binary and native host installation." });
   });
   job.timer = setTimeout(() => {

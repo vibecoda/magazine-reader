@@ -30,7 +30,7 @@ test("archives preserve Japanese, English, source metadata and private file perm
   assert.equal(statSync(saved.info.textPath).mode & 0o777, 0o600);
   assert.equal(statSync(saved.info.summaryPath).mode & 0o777, 0o600);
   assert.equal(statSync(join(saved.info.directory, "metadata.json")).mode & 0o777, 0o600);
-  assert.equal(ARCHIVE_DIR, resolve(ROOT, "../../data/magazine-reader"));
+  assert.equal(ARCHIVE_DIR, resolve(ROOT, "data"));
 });
 
 test("repeated requests get distinct folders and preserve earlier text versions", t => {
