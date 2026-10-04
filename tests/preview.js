@@ -11,6 +11,7 @@ const summaries = {
   glossary: "New ways of working\n\nA company's three-month trial of a four-day week brought less commuting but more time pressure.\n\nVocabulary\n• 勤務制度 (きんむせいど) — working-hours system\n• 試験的に (しけんてきに) — on a trial basis\n• 導入する (どうにゅうする) — to introduce, adopt\n• 通勤時間 (つうきんじかん) — commuting time\n• 両立 (りょうりつ) — balancing two things at once\n• 負担 (ふたん) — burden, load\n• 判断する (はんだんする) — to judge, conclude",
 };
 const deliver = message => new Promise(resolve => listeners[0]({ channel: "magazine-reader", ...message }, {}, resolve));
+summaries.stocks = "Companies in a four-day week debate\n\nThe excerpt names two listed firms trialling shorter weeks and one unlisted consultancy.\n\nStocks\n- 7203 | トヨタ自動車 | Toyota Motor | stated | Cited as considering a four-day pilot\n- 160A | アズーム | Azoom | inferred | Mentioned as an early adopter\n\nOther companies\n- ---- | 働き方研究所 | Work Style Institute | stated | Ran the employee survey";
 const storage = { local: {
   get: async key => { try { return { [key]: JSON.parse(localStorage.getItem(`fixture-${key}`)) }; } catch { return {}; } },
   set: async values => { for (const [key, value] of Object.entries(values)) localStorage.setItem(`fixture-${key}`, JSON.stringify(value)); },

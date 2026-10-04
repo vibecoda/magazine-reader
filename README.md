@@ -1,4 +1,4 @@
-# Magazine Reader · 0.3.0
+# Magazine Reader · 0.4.0
 
 A small Chrome extension for the Rakuten Magazine web reader. Click the extension,
 select a region of the visible spread, and read an English summary in an overlay.
@@ -58,6 +58,11 @@ editing its JavaScript.
    | Detailed | Section-by-section headings and bullets, keeping figures and quotes |
    | Translation | A full English translation rather than a summary |
    | Vocabulary | The gist plus 8–15 Japanese words with readings and meanings |
+   | Stocks | Each company named, with its Tokyo securities code linked to Monex |
+
+   In **Stocks**, click a code to open `monex.ifis.co.jp/index.php?sa=find&ta=n&wd=<code>`
+   in a new tab. Codes the model supplied itself, rather than found in the article,
+   carry a **verify code** badge; uncertain or unlisted companies get no link.
 
    Choosing a tab you haven't generated yet sends the same OCR text again in that
    style; generated styles are kept for the capture (marked with a dot) and switch
@@ -66,7 +71,7 @@ editing its JavaScript.
    line spacing, width, theme (paper, sepia, night), position (centered, or docked
    left/right so the magazine stays usable), and ragged or justified alignment.
    Settings and the last style are remembered in `chrome.storage.local`.
-   Keys while the reader has focus: `+` / `-` text size, `1`–`6` style, Escape
+   Keys while the reader has focus: `+` / `-` text size, `1`–`7` style, Escape
    closes settings, then the reader. A thin bar under the header shows reading progress.
    Review or edit **Japanese text**, then **Summarize** / **Regenerate** to retry with
    corrections. **Copy** copies the title and main text without its final

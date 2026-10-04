@@ -73,3 +73,16 @@ test("style-specific section labels such as Vocabulary become headings", () => {
   ]);
   assert.equal(copyText("Title\n\nGlossary:\n• 語 — word\n\nLimitations: Partial."), "Title\n\nGlossary:\n• 語 — word");
 });
+
+test("stock bullets parse codes, names and provenance; only valid codes get a Monex link", () => {
+  const { stock, stockUrl } = context.magazineSummary;
+  assert.deepEqual({ ...stock("7203 | トヨタ自動車 | Toyota Motor | stated | Raised its forecast") },
+    { code: "7203", ja: "トヨタ自動車", en: "Toyota Motor", source: "stated", note: "Raised its forecast" });
+  assert.equal(stock("**160a** | アズーム | Azoom | inferred | Parking platform").code, "160A");
+  assert.equal(stock("---- | 某社 | A startup | stated | Unlisted").code, null);
+  assert.equal(stock("A plain bullet without fields"), null);
+  assert.equal(stockUrl("160A"), "https://monex.ifis.co.jp/index.php?sa=find&ta=n&wd=160A");
+  for (const bad of ["0123", "72031", "7a03", "../x", "1&=2"]) assert.equal(stockUrl(bad), null);
+  assert.deepEqual(parse("Title\n\nStocks\n- 7203 | トヨタ | Toyota | stated | x\n\nOther companies\n- ---- | 某社 | Firm | stated | y")
+    .map(block => block.type), ["title", "heading", "list", "heading", "list"]);
+});

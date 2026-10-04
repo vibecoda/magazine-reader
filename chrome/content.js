@@ -11,6 +11,7 @@
     detailed: ["Detailed", "Section-by-section notes with figures and quotes", "Detailed notes"],
     translation: ["Translation", "A full English translation, not a summary", "English translation"],
     glossary: ["Vocabulary", "The gist plus a Japanese word list", "Gist and vocabulary"],
+    stocks: ["Stocks", "Companies and securities codes, linked to Monex", "Stocks mentioned"],
   };
   const FONTS = {
     serif: ["Serif", `"Iowan Old Style","Charter","Georgia","Hiragino Mincho ProN",serif`],
@@ -100,6 +101,12 @@
     .summary h4{font:650 11px/1.5 system-ui,sans-serif;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin:2em 0 .8em;text-align:left}
     .summary p{margin:0 0 1em}.summary .lead{font-size:1.06em}.summary ul,.summary ol{margin:.8em 0 1.4em;padding-left:1.3em}.summary li{padding-left:.35em;margin:0 0 .7em}.summary li::marker{color:var(--accent)}
     .summary strong{color:var(--heading)}
+    .summary ul.stocks{list-style:none;padding:0;margin:.6em 0 1.4em}.summary li.stock{display:flex;gap:.9em;align-items:flex-start;padding:.7em 0;margin:0;border-bottom:1px solid var(--line)}
+    .ticker{flex:none;min-width:4.6em;text-align:center;font:650 .8em/1 "SF Mono",Menlo,monospace;letter-spacing:.04em;padding:.55em .5em;margin-top:.15em;border-radius:7px;background:var(--primary);color:var(--primary-fg);text-decoration:none}
+    a.ticker:hover{filter:brightness(1.12)}a.ticker:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.ticker.none{background:var(--surface);color:var(--muted)}
+    .stock-body{min-width:0;line-height:1.45}.stock-name{display:flex;flex-wrap:wrap;align-items:baseline;gap:.2em .6em}.stock-ja{font-size:.85em;color:var(--muted)}
+    .badge{font:600 10px/1.4 system-ui,sans-serif;text-transform:uppercase;letter-spacing:.8px;color:var(--note-fg);background:var(--note-bg);border:1px solid var(--note-line);border-radius:999px;padding:1px 7px}
+    .stock-note{font-size:.85em;color:var(--muted);margin-top:.2em}
     .summary .note{background:var(--note-bg);border-left:3px solid var(--note-line);border-radius:0 7px 7px 0;padding:.8em 1em;font-size:.8em;line-height:1.65;color:var(--note-fg);margin:1.6em 0;font-family:system-ui,sans-serif;text-align:left}
     .note-label{display:block;font:650 10px/1.5 system-ui,sans-serif;text-transform:uppercase;letter-spacing:1.2px;margin-bottom:6px}
     .skeleton{padding:4px 0 10px}.skeleton i{display:block;height:.9em;margin:0 0 1em;border-radius:5px;background:linear-gradient(90deg,var(--skeleton) 30%,var(--bg) 50%,var(--skeleton) 70%) 0 0/300% 100%;animation:shimmer 1.4s linear infinite;font-size:var(--reader-size)}
@@ -211,7 +218,7 @@
       segmented("Theme", "theme", THEMES), segmented("Position", "layout", LAYOUTS),
       segmented("Alignment", "align", { left: "Ragged", justify: "Justified" }));
     const foot = node("div", "settings-foot"), keys = node("span");
-    for (const [key, text] of [["+", " / "], ["−", " size · "], ["1", "–"], ["6", " style · "], ["Esc", " close"]]) keys.append(node("kbd", "", key), text);
+    for (const [key, text] of [["+", " / "], ["−", " size · "], ["1", "–"], [String(Object.keys(STYLES).length), " style · "], ["Esc", " close"]]) keys.append(node("kbd", "", key), text);
     foot.append(keys, button("Reset reading settings", () => saveSettings({ ...DEFAULTS, style: settings.style, toolbarSide: settings.toolbarSide }), "link"));
     sheet.append(foot); return sheet;
   }
@@ -265,6 +272,11 @@
     };
     let firstParagraph = true;
     for (const block of globalThis.magazineSummary.parse(text)) {
+      if (block.type === "list" && activeStyle === "stocks" && block.items.every(item => globalThis.magazineSummary.stock(item))) {
+        const list = node("ul", "stocks");
+        for (const item of block.items) list.append(stockRow(globalThis.magazineSummary.stock(item), appendInline));
+        summaryNode.append(list); continue;
+      }
       if (block.type === "list") {
         const list = node(block.ordered ? "ol" : "ul");
         for (const item of block.items) { const li = node("li"); appendInline(li, item); list.append(li); }
@@ -281,6 +293,23 @@
     readingLabel.replaceChildren(node("span", "", `${STYLES[activeStyle][2]} · ${Math.max(1, Math.ceil(words / 200))} min read`),
       node("span", "", entry && entry.source !== ocrText ? "Japanese text edited since" : `${words} words`));
     summaryNode.parentElement.scrollTop = 0;
+  }
+  function stockRow(row, appendInline) {
+    const li = node("li", "stock"), url = row.code && globalThis.magazineSummary.stockUrl(row.code);
+    if (url) {
+      const link = node("a", "ticker", row.code);
+      Object.assign(link, { href: url, target: "_blank", rel: "noopener noreferrer", title: `Open ${row.code} on Monex (IFIS) in a new tab` });
+      li.append(link);
+    } else li.append(node("span", "ticker none", "—"));
+    const body = node("div", "stock-body"), name = node("div", "stock-name");
+    const en = node("strong"); appendInline(en, row.en || row.ja); name.append(en);
+    if (row.ja && row.en) { const ja = node("span", "stock-ja", row.ja); ja.lang = "ja"; name.append(ja); }
+    if (row.code && row.source === "inferred") {
+      const badge = node("span", "badge", "verify code"); badge.title = "The model supplied this code; it is not in the article."; name.append(badge);
+    }
+    body.append(name);
+    if (row.note) { const note = node("div", "stock-note"); appendInline(note, row.note); body.append(note); }
+    li.append(body); return li;
   }
   function chooseStyle(key) {
     if (busy || !Object.hasOwn(STYLES, key)) return;

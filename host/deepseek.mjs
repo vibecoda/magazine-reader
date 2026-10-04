@@ -22,6 +22,15 @@ the translation in paragraphs that follow the original order. Mark unreadable pa
   glossary: { tokens: 2000, task: "Summarize", shape: `Start with a short descriptive title and a one-sentence gist. Then add a
 heading "Vocabulary" with 8–15 bullet points of useful or difficult Japanese words and phrases from the
 excerpt, each formatted as: 語句 (hiragana reading) — English meaning in this context.` },
+  stocks: { tokens: 2000, task: "List the companies and stocks named in", shape: `Start with a short descriptive title and a
+one-sentence gist. Then add a heading "Stocks" listing every Tokyo-listed company the excerpt mentions,
+one bullet each, in exactly this format:
+- CODE | Japanese name | English name | stated or inferred | why the article mentions it, in one short clause
+CODE is the four-character Tokyo Stock Exchange securities code, such as 7203 or 160A. Write "stated" when
+the code appears in the excerpt and "inferred" when you supply it from your own knowledge. If you are not
+certain of a code, write ---- instead; never guess. Then, only if there are any, add a heading
+"Other companies" for unlisted, foreign, or unidentified companies in the same format with ---- as CODE.
+If the excerpt names no companies, say so in one sentence.` },
 };
 export const DEFAULT_STYLE = "overview";
 

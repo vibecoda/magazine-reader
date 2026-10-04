@@ -1,7 +1,7 @@
 /* Shared by the content script and its UI fixture. No HTML is parsed. */
 (() => {
   const noteLabel = /^(limitations(?: note)?|disclaimer|caveats|uncertainties|limits of (?:this|the) excerpt|note)$/i;
-  const sectionLabel = /^(overview|key points|main points|summary|vocabulary|key vocabulary|glossary|key terms)$/i;
+  const sectionLabel = /^(overview|key points|main points|summary|vocabulary|key vocabulary|glossary|key terms|stocks|other companies)$/i;
   const plainLine = line => line.trim().replace(/^#{1,6}\s+/, "").replace(/^\*\*(.+?)\*\*/, "$1");
   const noteLine = line => noteLabel.test(plainLine(line).split(":", 1)[0].trim());
   function copyText(text) {
@@ -66,5 +66,18 @@
     flush();
     return blocks;
   }
-  globalThis.magazineSummary = { parse, inline, copyText };
+  // Tokyo securities codes: four characters, letters allowed in the 2nd and 4th places (e.g. 7203, 160A).
+  const stockCode = /^[1-9][0-9A-Z][0-9][0-9A-Z]$/;
+  /** One "CODE | 日本語名 | English name | stated/inferred | note" bullet from the stocks style, or null. */
+  function stock(item) {
+    const parts = String(item).split("|").map(part => part.trim());
+    if (parts.length < 3) return null;
+    const [code, ja, en, ...rest] = parts;
+    const source = /^(stated|inferred)$/i.test(rest[0] || "") ? rest.shift().toLowerCase() : null;
+    const clean = code.replace(/[*`[\]]/g, "").toUpperCase();
+    return { code: stockCode.test(clean) ? clean : null, ja, en, source, note: rest.join(" | ") };
+  }
+  const stockUrl = code => stockCode.test(code)
+    ? `https://monex.ifis.co.jp/index.php?sa=find&ta=n&wd=${encodeURIComponent(code)}` : null;
+  globalThis.magazineSummary = { parse, inline, copyText, stock, stockUrl };
 })();
