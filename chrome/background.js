@@ -49,6 +49,21 @@ chrome.action.onClicked.addListener(async tab => {
   }
 });
 
+const NOT_INSTALLED = "Install the Magazine Reader native host: node host/install.mjs in the magazine-reader repo";
+
+/** Vocabulary cards go one message at a time to their own host process, so they never wait for a summary. */
+function kotoba(message) {
+  if (!["lookup", "draft", "register"].includes(message.action)) throw new Error("Unknown Kotoba request.");
+  const { action, terms, term, reading, lemma, sentence, card } = message;
+  const payload = { id: crypto.randomUUID(), type: "kotoba", action, terms, term, reading, lemma, sentence, card };
+  if (JSON.stringify(payload).length > 64 * 1024) throw new Error("This Kotoba request is too large.");
+  return new Promise(resolve => chrome.runtime.sendNativeMessage(HOST, payload, reply => {
+    const failure = chrome.runtime.lastError;
+    if (failure) resolve({ ok: false, error: /not found|forbidden/i.test(failure.message || "") ? NOT_INSTALLED : "The native host stopped." });
+    else resolve(reply ?? { ok: false, error: "The native host gave no answer." });
+  }));
+}
+
 async function request(message, sender) {
   if (sender.id !== chrome.runtime.id || sender.frameId !== 0 || !sender.tab || !supported(sender.url))
     throw new Error("Requests must come from the active reader overlay.");
@@ -64,6 +79,7 @@ async function request(message, sender) {
     || capture.url !== sender.url || capture.expires < Date.now())
     throw new Error("This capture expired. Click the extension to capture again.");
   if (message.type === "cancel") { cancel(tabId); return { ok: true }; }
+  if (message.type === "kotoba") return kotoba(message);
   if (!["capture", "summarize", "ask"].includes(message.type)) throw new Error("Unknown overlay request.");
   if (typeof message.id !== "string" || !/^[a-zA-Z0-9-]{1,80}$/.test(message.id)) throw new Error("Invalid request ID.");
   if (jobs.has(tabId)) throw new Error("A request is already running.");
@@ -95,8 +111,7 @@ async function request(message, sender) {
     jobs.delete(tabId); clearTimeout(job.timer);
     const missing = /not found|forbidden/i.test(failure?.message || "");
     void deliver({ id, done: true, ok: false, error: missing
-      ? "Install the Magazine Reader native host: node host/install.mjs in the magazine-reader repo"
-      : "The native host stopped. Check the OCR binary and native host installation." });
+      ? NOT_INSTALLED : "The native host stopped. Check the OCR binary and native host installation." });
   });
   job.timer = setTimeout(() => {
     void deliver({ id, done: true, ok: false, error: "Processing timed out. Try a smaller region." });

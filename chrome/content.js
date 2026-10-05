@@ -115,9 +115,30 @@
     .ask-input{margin:0;height:auto;min-height:44px;max-height:180px;resize:none;font-family:system-ui,-apple-system,"Hiragino Sans",sans-serif;font-size:15px;line-height:1.5;padding:10px 12px}
     .ask-send{flex:none;height:44px;padding:0 18px;background:var(--primary);color:var(--primary-fg)}
     .composer-foot{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--muted);padding-bottom:4px}
-    .summary ul.vocab{list-style:none;padding:0;margin:0 0 1.4em}.summary ul.vocab li{display:grid;grid-template-columns:minmax(7em,30%) 1fr;gap:.3em 1.2em;align-items:baseline;padding:.65em 0;margin:0;border-bottom:1px solid var(--line)}
+    .summary ul.vocab{list-style:none;padding:0;margin:0 0 1.4em}.summary ul.vocab>li{display:grid;grid-template-columns:minmax(7em,30%) 1fr;gap:.3em 1.2em;align-items:baseline;padding:.65em 0;margin:0;border-bottom:1px solid var(--line)}
     .vocab-word{display:flex;flex-direction:column;min-width:0}.vocab-term{font:500 1.15em/1.35 "Hiragino Mincho ProN","Hiragino Sans",serif;color:var(--heading)}.vocab-reading{font-size:.72em;color:var(--muted);letter-spacing:.04em}
-    .vocab-meaning{line-height:1.45}@media(max-width:600px){.summary ul.vocab li{grid-template-columns:1fr}}
+    .vocab-meaning{line-height:1.45}.summary ul.vocab>li.kotoba-row{grid-template-columns:minmax(7em,30%) 1fr auto}
+    .kotoba-toggle{align-self:center;justify-self:end;font:600 11px/1.2 system-ui,sans-serif;letter-spacing:.2px;padding:5px 10px;border-radius:999px;background:var(--btn);border:1px solid var(--btn-line);color:var(--btn-fg);white-space:nowrap}
+    .kotoba-toggle:hover{background:var(--bg)}.kotoba-toggle[data-state="found"],.kotoba-toggle[data-state="added"]{background:var(--primary);border-color:var(--primary);color:var(--primary-fg)}
+    .kotoba-toggle[data-state="checking"]{opacity:.55}.kotoba-toggle[aria-expanded="true"]{outline:2px solid var(--accent);outline-offset:1px}
+    .kotoba{grid-column:1/-1;margin:.4em 0 .2em;padding:.9em 1.1em 1em;background:var(--surface);border:1px solid var(--line);border-radius:10px;font:14px/1.55 system-ui,-apple-system,"Hiragino Sans",sans-serif;text-align:left;hyphens:manual;animation:fade .15s}
+    .kotoba p{margin:.3em 0}.kotoba .kstatus{color:var(--muted)}.kotoba .kerror{color:var(--error)}.kotoba .knote{color:var(--muted);font-size:12px}
+    .kword+.kword{border-top:1px solid var(--line);margin-top:.8em;padding-top:.8em}
+    .kterm{font:500 26px/1.25 "Hiragino Mincho ProN","Yu Mincho",serif;color:var(--heading)}.kreading{color:var(--muted);font-size:15px;margin-left:.6em}
+    .kmeaning{font-size:15px}.ktags{display:flex;flex-wrap:wrap;gap:4px;margin:.4em 0}.ktag{background:var(--bg);border:1px solid var(--line);border-radius:99px;padding:1px 8px;font-size:11px;color:var(--muted)}
+    .kotoba ul.kexamples{list-style:none;padding:0;margin:.5em 0}.kotoba ul.kexamples li{margin:.5em 0}
+    .kja{font:15px/1.9 "Hiragino Mincho ProN","Yu Mincho",serif;color:var(--fg)}.ken{color:var(--muted);font-size:13px}.kotoba rt{font-size:9px;color:var(--muted)}
+    .kotoba details{border-top:1px solid var(--line);margin-top:.6em;padding-top:.6em}.kotoba summary{font-size:12px}
+    .kguide{margin-top:.4em}.kguide p,.kguide li{font-size:14px;line-height:1.7;margin:0 0 .6em}.kguide ul,.kguide ol{padding-left:1.3em;margin:0 0 .6em}.kguide li::marker{color:var(--accent)}
+    .kguide h5{font:650 13px/1.4 system-ui,sans-serif;margin:.8em 0 .4em;color:var(--heading)}
+    .kotoba label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin:.7em 0 .2em}
+    .kotoba input,.kotoba textarea{display:block;width:100%;height:auto;margin:0;font:14px/1.6 system-ui,-apple-system,"Hiragino Sans",sans-serif;color:var(--fg);background:var(--field);border:1px solid var(--btn-line);border-radius:8px;padding:6px 9px}
+    .kotoba fieldset{border:1px solid var(--line);border-radius:9px;margin:.7em 0 0;padding:.2em .8em .8em}.kotoba legend{font-size:12px;font-weight:600;color:var(--muted);padding:0 4px}
+    .kguide-head{display:flex;justify-content:space-between;align-items:center;margin:.8em 0 .2em}.kguide-head span{font-size:12px;font-weight:600;color:var(--muted)}
+    .kguide-preview{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:.5em .9em}
+    .kotoba .actions{margin-top:.9em;gap:7px}.kotoba .actions button{font-size:12px;padding:7px 13px;background:var(--btn);border-color:var(--btn-line);color:var(--btn-fg)}
+    .kotoba .actions button.primary{background:var(--primary);border-color:var(--primary);color:var(--primary-fg)}.kotoba .actions button.link{background:none;border:0;padding:0;font-size:12px;color:var(--btn-fg)}
+    @media(max-width:600px){.summary ul.vocab>li,.summary ul.vocab>li.kotoba-row{grid-template-columns:1fr}.kotoba-toggle{justify-self:start}}
     .summary ul.stocks{list-style:none;padding:0;margin:.6em 0 1.4em}.summary li.stock{display:flex;gap:.9em;align-items:flex-start;padding:.7em 0;margin:0;border-bottom:1px solid var(--line)}
     .ticker{flex:none;min-width:4.6em;text-align:center;font:650 .8em/1 "SF Mono",Menlo,monospace;letter-spacing:.04em;padding:.55em .5em;margin-top:.15em;border-radius:7px;background:var(--primary);color:var(--primary-fg);text-decoration:none}
     a.ticker:hover{filter:brightness(1.12)}a.ticker:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.ticker.none{background:var(--surface);color:var(--muted)}
@@ -147,8 +168,9 @@
   let ocrText = "", cropped = "", activeStyle = DEFAULTS.style;
   const summaries = new Map(); // style → { text, source, truncated }
   const thread = []; // { question, answer?, error?, truncated? }; at most one turn is pending
+  const vocab = new Map(); // "term|reading" → the word's Kotoba state for this capture; see vocabEntry
   let askNode = null, threadNode = null, askInput = null, askButton = null, suggestionsNode = null, clearButton = null;
-  let panel = null, panelStatus = null, summaryNode = null, skeleton = null, readingLabel = null, textArea = null, archiveNode = null;
+  let panel = null, panelStatus = null, summaryNode = null, skeleton = null, readingLabel = null, textArea = null, archiveNode = null, kotobaCount = null;
   let summarizeButton = null, copyButton = null, cancelButton = null, settingsButton = null, settingsSheet = null, tabButtons = [];
   const syncers = [];
   const node = (tag, className, text) => {
@@ -297,7 +319,7 @@
     }
   };
   /** Renders model text as DOM; nothing is parsed as HTML. */
-  function renderBlocks(target, text, { stocks = false, vocabulary = false, lead = true } = {}) {
+  function renderBlocks(target, text, { stocks = false, vocabulary = false, kotoba = false, lead = true } = {}) {
     let firstParagraph = lead;
     for (const block of globalThis.magazineSummary.parse(text)) {
       if (block.type === "list" && stocks && block.items.every(item => globalThis.magazineSummary.stock(item))) {
@@ -308,11 +330,12 @@
       if (block.type === "list" && vocabulary && block.items.every(item => globalThis.magazineSummary.term(item))) {
         const list = node("ul", "vocab");
         for (const item of block.items) {
-          const { term, reading, meaning } = globalThis.magazineSummary.term(item), li = node("li");
+          const row = globalThis.magazineSummary.term(item), { term, reading, meaning } = row, li = node("li");
           const word = node("div", "vocab-word"), ja = node("span", "vocab-term", term); ja.lang = "ja"; word.append(ja);
           if (reading) { const kana = node("span", "vocab-reading", reading); kana.lang = "ja"; word.append(kana); }
           const gloss = node("div", "vocab-meaning"); appendInline(gloss, meaning);
           li.append(word, gloss); list.append(li);
+          if (kotoba) attachKotoba(li, row);
         }
         target.append(list); continue;
       }
@@ -353,13 +376,15 @@
     if (activeStyle === "ask") { summaryNode.replaceChildren(); renderThread(); return; }
     const entry = current(), text = entry?.text || "";
     summaryNode.replaceChildren();
-    renderBlocks(summaryNode, text, { stocks: activeStyle === "stocks", vocabulary: activeStyle === "glossary" });
+    renderBlocks(summaryNode, text, { stocks: activeStyle === "stocks", vocabulary: activeStyle === "glossary", kotoba: activeStyle === "glossary" });
     const words = text.trim() ? text.trim().split(/\s+/).length : 0;
-    const terms = summaryNode.querySelectorAll(".vocab li").length;
+    const terms = summaryNode.querySelectorAll(".vocab>li").length;
     readingLabel.hidden = !text;
+    kotobaCount = terms ? node("span") : null;
     readingLabel.replaceChildren(node("span", "", terms ? `${STYLES[activeStyle][2]} · ${terms} terms` : `${STYLES[activeStyle][2]} · ${Math.max(1, Math.ceil(words / 200))} min read`),
-      node("span", "", entry && entry.source !== ocrText ? "Japanese text edited since" : terms ? "" : `${words} words`));
+      entry && entry.source !== ocrText ? node("span", "", "Japanese text edited since") : kotobaCount || node("span", "", `${words} words`));
     summaryNode.parentElement.scrollTop = 0;
+    if (terms) { void lookupWords(); paintCount(); }
   }
   function stockRow(row) {
     const li = node("li", "stock"), url = row.code && globalThis.magazineSummary.stockUrl(row.code);
@@ -377,6 +402,214 @@
     body.append(name);
     if (row.note) { const note = node("div", "stock-note"); appendInline(note, row.note); body.append(note); }
     li.append(body); return li;
+  }
+  // ---- Kotoba: each vocabulary word's card in the local Kotoba library, or a DeepSeek draft to add ----
+  const KOTOBA_LABELS = { checking: ["…", "Checking your Kotoba library"], found: ["In Kotoba", "Show the Kotoba card"],
+    related: ["Related", "Kotoba has related words, not this one. Show them or generate a card"],
+    missing: ["+ Card", "Not in Kotoba. Generate a card with DeepSeek"], added: ["Added", "Added to Kotoba"],
+    error: ["Kotoba", "Kotoba lookup failed. Show details"] };
+  const FURIGANA = /([\p{Script=Han}々〆ヶ]+)（([\p{Script=Hiragana}\p{Script=Katakana}ー]+)）/gu;
+  /**
+   * One word's state, kept across tab switches for the capture: lookup status and results, an open
+   * card, and a draft being edited, so re-rendering the list never loses what was typed.
+   */
+  function vocabEntry({ term, reading }) {
+    const key = `${term}|${reading || ""}`;
+    if (!vocab.has(key)) vocab.set(key, { term, reading: reading || "", status: null, words: [], lemma: term,
+      open: false, working: null, card: null, drafted: "", added: null, error: "", nodes: null });
+    return vocab.get(key);
+  }
+  function attachKotoba(li, row) {
+    const entry = vocabEntry(row), toggle = button("", () => { entry.open = !entry.open; paintEntry(entry); }, "kotoba-toggle");
+    const card = node("div", "kotoba");
+    li.classList.add("kotoba-row"); li.append(toggle, card);
+    entry.nodes = { li, toggle, card };
+    paintEntry(entry);
+  }
+  const kotobaRequest = payload => ask({ type: "kotoba", ...payload })
+    .catch(error => ({ ok: false, error: error.message }))
+    .then(reply => reply ?? { ok: false, error: "The extension did not respond." });
+  function paintCount() {
+    if (!kotobaCount) return;
+    const entries = [...vocab.values()].filter(entry => entry.nodes?.li.isConnected);
+    const known = entries.filter(entry => entry.status === "found" || entry.status === "added").length;
+    kotobaCount.textContent = entries.some(entry => entry.status === "checking") ? "Checking Kotoba…"
+      : entries.every(entry => entry.status === "error") ? "Kotoba unavailable" : `${known} of ${entries.length} in Kotoba`;
+  }
+  async function lookupWords(entries = [...vocab.values()].filter(entry => !entry.status && entry.nodes?.li.isConnected)) {
+    if (!entries.length) return;
+    for (const entry of entries) { entry.status = "checking"; entry.error = ""; paintEntry(entry); }
+    paintCount();
+    for (let start = 0; start < entries.length; start += 40) {
+      const batch = entries.slice(start, start + 40);
+      const reply = await kotobaRequest({ action: "lookup", terms: batch.map(({ term, reading }) => ({ term, reading })) });
+      batch.forEach((entry, index) => {
+        const result = reply.ok && reply.results?.[index];
+        if (!result) Object.assign(entry, { status: "error", error: reply.error || "Kotoba did not answer." });
+        else Object.assign(entry, { status: result.exact ? "found" : result.words.length ? "related" : "missing",
+          words: result.words, lemma: result.lemma || entry.term });
+        paintEntry(entry);
+      });
+    }
+    paintCount();
+  }
+  /** The sentence the word came from, which tells DeepSeek the sense; it is never copied into the card. */
+  function sentenceFor(term) {
+    const sentences = ocrText.replace(/\s+/g, "").split(/(?<=[。！？!?])/);
+    return (sentences.find(sentence => sentence.includes(term)) || "").slice(0, 400);
+  }
+  async function draftWord(entry) {
+    Object.assign(entry, { working: "draft", error: "", open: true }); paintEntry(entry);
+    const reply = await kotobaRequest({ action: "draft", term: entry.term, reading: entry.reading, lemma: entry.lemma, sentence: sentenceFor(entry.term) });
+    entry.working = null;
+    if (!reply.ok || !reply.card) entry.error = reply.error || "The draft failed.";
+    else Object.assign(entry, { card: reply.card, drafted: `Drafted by ${reply.model} in ${(reply.ms / 1000).toFixed(1)} s. Edit anything, then add it.` });
+    paintEntry(entry);
+  }
+  async function registerWord(entry) {
+    const card = { ...entry.card, examples: entry.card.examples.filter(example => example.japanese.trim() && example.english.trim()) };
+    const missing = ["term", "reading", "meaning"].find(key => !card[key]?.trim());
+    if (missing) { entry.error = `Fill in the ${missing === "term" ? "word" : missing} first.`; paintEntry(entry); return; }
+    Object.assign(entry, { working: "register", error: "" }); paintEntry(entry);
+    const reply = await kotobaRequest({ action: "register", card });
+    entry.working = null;
+    if (!reply.ok) entry.error = reply.error || "The card could not be added.";
+    else Object.assign(entry, { added: reply, status: "added" });
+    paintEntry(entry); paintCount();
+  }
+  function paintEntry(entry) {
+    const nodes = entry.nodes;
+    if (!nodes) return;
+    const [label, title] = KOTOBA_LABELS[entry.status || "checking"];
+    nodes.toggle.textContent = label; nodes.toggle.title = title; nodes.toggle.dataset.state = entry.status || "checking";
+    nodes.toggle.setAttribute("aria-expanded", String(entry.open));
+    nodes.toggle.setAttribute("aria-label", `${entry.term}: ${title}`);
+    nodes.card.hidden = !entry.open;
+    if (entry.open) nodes.card.replaceChildren(...kotobaView(entry));
+  }
+  function kotobaView(entry) {
+    const out = [], error = entry.error && node("p", "kerror", entry.error);
+    if (error) error.setAttribute("role", "alert");
+    const actions = (...items) => { const row = node("div", "actions"); row.append(...items); return row; };
+    if (entry.status === "checking") return [node("p", "kstatus", "Looking it up in your Kotoba library…")];
+    if (entry.status === "error") return [error, actions(button("Try again", () => void lookupWords([entry])))];
+    if (entry.added) {
+      const { remote, label } = entry.added;
+      out.push(node("p", "kstatus", remote.status === "added" ? "Added to Kotoba. It joins the study queue as a new word."
+        : `Kotoba already had this word (added on the site after your last backup). It is now labelled ${label}.`));
+      if (entry.card.studyGuide && !remote.guideSaved) out.push(node("p", "knote", "The site did not store the study guide yet; it is kept in your local library."));
+      out.push(wordView({ ...entry.card, tags: [label], source: "reader" }, true));
+      return out;
+    }
+    if (entry.working === "draft") return [node("p", "kstatus", "Drafting a card with DeepSeek — a few seconds…")];
+    if (entry.card) return [node("p", "knote", entry.drafted), cardForm(entry), error];
+    const generate = button(entry.status === "missing" ? "Generate card with DeepSeek" : "Generate a card for this word",
+      () => void draftWord(entry), entry.status === "missing" ? "primary" : "");
+    if (entry.status === "found" || entry.status === "related") {
+      if (entry.status === "related") out.push(node("p", "knote", `${entry.lemma} itself is not in Kotoba. Related words it has:`));
+      // Related words are the parts kuromoji split out (週休三日制 → 三, 日…), so only the first few are worth showing.
+      entry.words.slice(0, entry.status === "found" ? 5 : 3).forEach((word, index) => out.push(wordView(word, entry.status === "found" && index === 0)));
+      out.push(error, actions(entry.status === "found" ? link("Not the word you meant? Generate a new card", () => void draftWord(entry)) : generate));
+      return out;
+    }
+    out.push(node("p", "", `${entry.lemma} is not in your Kotoba library yet.`), error, actions(generate),
+      node("p", "knote", "Sends the word and its sentence to DeepSeek. Nothing is added until you confirm."));
+    return out;
+  }
+  const link = (text, handler) => button(text, handler, "link");
+  function withFurigana(target, text) {
+    let last = 0;
+    for (const match of text.matchAll(FURIGANA)) {
+      target.append(text.slice(last, match.index));
+      const ruby = node("ruby", "", match[1]); ruby.append(node("rt", "", match[2])); target.append(ruby);
+      last = match.index + match[0].length;
+    }
+    target.append(text.slice(last));
+    return target;
+  }
+  /** Study guides are Markdown from any Kotoba member: rendered as DOM text, never parsed as HTML. */
+  function renderGuide(text) {
+    const box = node("div", "kguide"); box.lang = "en";
+    let list = null, paragraph = null;
+    for (const raw of String(text).replace(/\r/g, "").split("\n")) {
+      const line = raw.trim();
+      if (!line) { list = paragraph = null; continue; }
+      const heading = line.match(/^#{1,6}\s+(.*)$/), item = line.match(/^(?:[-*+]|(\d{1,9})[.)])\s+(.*)$/);
+      if (heading) { const h = node("h5"); appendInline(h, heading[1]); box.append(h); list = paragraph = null; continue; }
+      if (item) {
+        const tag = item[1] ? "OL" : "UL";
+        if (list?.tagName !== tag) { list = node(tag.toLowerCase()); box.append(list); }
+        const li = node("li"); appendInline(li, item[2]); list.append(li); paragraph = null; continue;
+      }
+      list = null;
+      if (paragraph) paragraph.append(node("br")); else { paragraph = node("p"); box.append(paragraph); }
+      appendInline(paragraph, line);
+    }
+    return box;
+  }
+  function wordView(word, guideOpen = false) {
+    const article = node("article", "kword"), head = node("div"), term = node("span", "kterm", word.term);
+    term.lang = "ja"; head.append(term);
+    if (word.reading && word.reading !== word.term) { const reading = node("span", "kreading", word.reading); reading.lang = "ja"; head.append(reading); }
+    article.append(head, node("p", "kmeaning", word.meaning));
+    if (word.match === "reading") article.append(node("p", "knote", "Matched by reading: Kotoba spells it differently."));
+    if (word.source === "reader") article.append(node("p", "knote", "Added from a reader since your last Kotoba backup."));
+    if (word.tags?.length) { const tags = node("div", "ktags"); for (const tag of word.tags) tags.append(node("span", "ktag", tag)); article.append(tags); }
+    if (word.examples?.length) {
+      const list = node("ul", "kexamples");
+      for (const example of word.examples) {
+        const li = node("li"), ja = withFurigana(node("div", "kja"), example.japanese); ja.lang = "ja";
+        li.append(ja, node("div", "ken", example.english)); list.append(li);
+      }
+      article.append(list);
+    }
+    if (word.studyGuide) {
+      const details = node("details"); details.open = guideOpen;
+      details.append(node("summary", "", "Study guide"), renderGuide(word.studyGuide)); article.append(details);
+    }
+    return article;
+  }
+  let fieldCount = 0;
+  function field(label, value, onInput, { multiline = false, rows = 2, lang } = {}) {
+    const id = `kotoba-field-${++fieldCount}`, input = node(multiline ? "textarea" : "input");
+    if (multiline) input.rows = rows; else input.type = "text";
+    if (lang) input.lang = lang;
+    input.id = id; input.value = value ?? "";
+    input.addEventListener("input", () => onInput(input.value));
+    const tag = node("label", "", label); tag.htmlFor = id;
+    return [tag, input];
+  }
+  function cardForm(entry) {
+    const card = entry.card, form = node("form");
+    // No submit button: Enter in a field must never publish a card to the site.
+    form.addEventListener("submit", event => event.preventDefault());
+    form.append(...field("Word", card.term, value => { card.term = value; }, { lang: "ja" }),
+      ...field("Reading (hiragana)", card.reading, value => { card.reading = value; }, { lang: "ja" }),
+      ...field("Meaning", card.meaning, value => { card.meaning = value; }));
+    card.examples.forEach((example, index) => {
+      const set = node("fieldset"); set.append(node("legend", "", `Example ${index + 1}`),
+        ...field("Japanese", example.japanese, value => { example.japanese = value; }, { multiline: true, rows: 2, lang: "ja" }),
+        ...field("English", example.english, value => { example.english = value; }, { multiline: true }));
+      form.append(set);
+    });
+    // The guide shows as it will read on the site, with its Markdown one click away.
+    const guide = node("textarea"), preview = node("div", "kguide-preview"), head = node("div", "kguide-head");
+    guide.rows = 10; guide.value = card.studyGuide || ""; guide.setAttribute("aria-label", "Study guide (Markdown)");
+    guide.addEventListener("input", () => { card.studyGuide = guide.value; });
+    const toggle = link("", () => show(guide.hidden));
+    const show = editing => {
+      guide.hidden = !editing; preview.hidden = editing; toggle.textContent = editing ? "Preview" : "Edit";
+      if (editing) guide.focus(); else preview.replaceChildren(guide.value.trim() ? renderGuide(guide.value) : node("p", "knote", "No study guide."));
+    };
+    head.append(node("span", "", "Study guide"), toggle); form.append(head, preview, guide);
+    show(false);
+    const add = button(entry.working === "register" ? "Adding…" : "Add to Kotoba", () => void registerWord(entry), "primary");
+    add.disabled = entry.working === "register"; add.title = "Adds the card to the Kotoba site and your local library";
+    const row = node("div", "actions");
+    row.append(add, button("Draft again", () => void draftWord(entry)),
+      button("Discard", () => { Object.assign(entry, { card: null, error: "" }); paintEntry(entry); }));
+    form.append(row);
+    return form;
   }
   function askQuestion(question) {
     question = question.trim();
@@ -535,7 +768,7 @@
         const canvas = document.createElement("canvas");
         canvas.width = Math.max(1, Math.round(region.width * sx)); canvas.height = Math.max(1, Math.round(region.height * sy));
         canvas.getContext("2d").drawImage(image, region.x * sx, region.y * sy, region.width * sx, region.height * sy, 0, 0, canvas.width, canvas.height);
-        cropped = canvas.toDataURL("image/png"); ocrText = ""; summaries.clear(); thread.length = 0; activeStyle = settings.style;
+        cropped = canvas.toDataURL("image/png"); ocrText = ""; summaries.clear(); thread.length = 0; vocab.clear(); activeStyle = settings.style;
         showPanel(); await submit({ type: "capture", image: cropped, mode, style: activeStyle });
       } catch (error) { showPanel(); updateBusy(false); setStatus(error.message, true); }
     };
@@ -573,7 +806,7 @@
     }
     if (message.type === "select") {
       await settingsReady;
-      capture = message; region = null; ocrText = ""; summaries.clear(); thread.length = 0; cropped = ""; jobId = null; jobStyle = null; busy = false; archiveInfo = null;
+      capture = message; region = null; ocrText = ""; summaries.clear(); thread.length = 0; vocab.clear(); cropped = ""; jobId = null; jobStyle = null; busy = false; archiveInfo = null;
       activeStyle = settings.style; settingsOpen = false;
       image = new Image(); image.src = capture.image; await image.decode(); selectionUI(); return { ok: true };
     }

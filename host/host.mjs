@@ -2,12 +2,15 @@
 import { fileURLToPath } from "node:url";
 import { ask, cleanText, cleanThread, DEFAULT_STYLE, STYLES, summarize } from "./deepseek.mjs";
 import { createArchive } from "./archive.mjs";
+import { kotoba } from "./kotoba.mjs";
 import { recognize } from "./ocr.mjs";
 import { extensionId } from "./paths.mjs";
 import { decodeMessages, encodeMessage, MAX_INPUT } from "./protocol.mjs";
 
-export async function handle(message, { emit = () => {}, ocr = recognize, llm = summarize, asker = ask, archive = createArchive, signal } = {}) {
+export async function handle(message, { emit = () => {}, ocr = recognize, llm = summarize, asker = ask, archive = createArchive, vocab = kotoba, signal } = {}) {
   if (!message || typeof message.id !== "string" || !/^[a-zA-Z0-9-]{1,80}$/.test(message.id)) throw new Error("Invalid request ID.");
+  // Vocabulary cards: nothing is archived, and the only reply is the final one.
+  if (message.type === "kotoba") return vocab(message);
   if (!["summarize", "ask"].includes(message.type) && (message.type !== "capture" || !["ocr", "summary"].includes(message.mode))) throw new Error("Unknown request.");
   const thread = message.type === "ask" ? cleanThread(message) : null;
   const style = thread ? "ask" : message.style ?? DEFAULT_STYLE;

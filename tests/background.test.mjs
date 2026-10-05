@@ -25,7 +25,9 @@ function fixture({ store = {}, active = { id: 1, windowId: 2, url: URL_READER } 
       sendMessage: async (tabId, message) => { sent.push({ tabId, message }); return { ok: true }; },
       onRemoved: event(), onUpdated: event(),
     },
-    runtime: { id: "this-extension", onMessage: event(), connectNative: () => {
+    runtime: { id: "this-extension", onMessage: event(), nativeMessages: [],
+      sendNativeMessage(host, message, reply) { this.nativeMessages.push({ host, message }); reply({ id: message.id, done: true, ok: true, results: [] }); },
+      connectNative: () => {
       const port = { onMessage: event(), onDisconnect: event(), posted: [], disconnected: false,
         postMessage(message) { this.posted.push(message); }, disconnect() { this.disconnected = true; } };
       ports.push(port); return port;
@@ -136,5 +138,23 @@ test("questions are bounded and forwarded with their history, never their overla
   const posted = f.ports[0].posted[0];
   assert.deepEqual([posted.type, posted.text, posted.question, posted.history], ["ask", "本文", "Why?", history]);
   assert.equal(posted.source.url, URL_READER);
+  await f.ask({ type: "cancel", token });
+});
+
+test("Kotoba requests go to their own native host process and still need the current capture", async () => {
+  const f = fixture(); await f.click(); const token = f.store["capture-1"].token;
+  await f.ask({ type: "summarize", text: "本文", token, id: "running" });
+  const terms = [{ term: "負担", reading: "ふたん" }];
+  assert.deepEqual(await f.ask({ type: "kotoba", action: "lookup", terms, token, extra: "dropped" }), { id: f.chrome.runtime.nativeMessages[0].message.id, done: true, ok: true, results: [] });
+  const { host, message } = f.chrome.runtime.nativeMessages[0];
+  assert.equal(host, "io.github.vibecoda.magazine_reader");
+  assert.deepEqual([message.type, message.action, message.terms, message.extra], ["kotoba", "lookup", terms, undefined]);
+  assert.equal(f.ports.length, 1);
+  assert.equal((await f.ask({ type: "kotoba", action: "delete", token })).ok, false);
+  assert.equal((await f.ask({ type: "kotoba", action: "lookup", terms, token: "stale" })).ok, false);
+  assert.equal((await f.ask({ type: "kotoba", action: "draft", sentence: "あ".repeat(70_000), token })).ok, false);
+  f.chrome.runtime.sendNativeMessage = (_host, _message, reply) => { f.chrome.runtime.lastError = { message: "Specified native messaging host not found." }; reply(); };
+  assert.match((await f.ask({ type: "kotoba", action: "lookup", terms, token })).error, /install.mjs/);
+  delete f.chrome.runtime.lastError;
   await f.ask({ type: "cancel", token });
 });

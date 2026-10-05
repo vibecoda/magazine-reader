@@ -60,6 +60,20 @@ Check the setup at any time:
 node host/install.mjs --check
 ```
 
+### Connecting Kotoba (optional)
+
+The Vocabulary tab can look words up in, and add cards to, [Kotoba](https://goi.benkyo.workers.dev/),
+using the Kotoba repository's own reader host (`extension/host/`). Set that up first as its
+`extension/README.md` describes: its local library (`build-library.mjs`) and, for adding cards, its
+`KOTOBA_INGEST_TOKEN`. Then point the installer at the repository once; it is remembered on re-install:
+
+```bash
+node host/install.mjs --kotoba /path/to/kotoba
+```
+
+`node host/install.mjs --check` shows the library and whether the ingest token was found. Drafting
+uses this extension's DeepSeek key.
+
 ### DeepSeek API key
 
 ```bash
@@ -100,7 +114,7 @@ The host looks for a key in this order and uses the first it finds:
    | Prose | A literal summary in flowing paragraphs, in the article's order |
    | Detailed | Section-by-section headings and bullets, keeping figures and quotes |
    | Translation | A full English translation rather than a summary |
-   | Vocabulary | 10–25 Japanese words and phrases, each with its reading and meaning |
+   | Vocabulary | 10–25 Japanese words and phrases, each with its reading and meaning, checked against your Kotoba library |
    | Stocks | Each company named, with its Tokyo securities code linked to Monex |
    | Ask | A conversation: ask DeepSeek anything about the page |
 
@@ -122,6 +136,20 @@ line. DeepSeek gets the page's Japanese text and up to 8 earlier questions and
 answers, and is told to answer from the article and clearly label any outside
 background knowledge. **Copy** copies the conversation; **Clear conversation**
 starts over.
+
+**Vocabulary and Kotoba** — if Kotoba is connected (see below), every word in the
+Vocabulary tab is checked against your local Kotoba library and gets a badge: **In Kotoba**,
+**Related** (Kotoba has only parts of it, e.g. 試験 for 試験的に), or **+ Card**. Click the badge:
+
+- **In Kotoba** shows the full card: reading, meaning, labels, examples with furigana, and the
+  study guide.
+- **+ Card** offers **Generate card with DeepSeek**, which drafts a card the way Kotoba Reader
+  does, from the word and the sentence it appeared in (the sentence only picks the sense; the
+  examples are always original, since magazines are copyrighted). Edit anything, then
+  **Add to Kotoba**: the card goes to the Kotoba site through its ingest API, labelled
+  `Web reading`, and into the local library, so the next lookup finds it.
+
+Lookups stay on your Mac. Nothing is drafted or added until you click.
 
 **Reading settings** — the **Aa** button: typeface (serif, sans, humanist, mono),
 text size, line spacing, width, theme (paper, sepia, night), position (centered, or
@@ -151,7 +179,8 @@ requests. Retries and other styles get their own folders; the shared capture ID 
 
 **What leaves your Mac:** only the recognized text (plus your questions) goes to
 `https://api.deepseek.com/chat/completions`, using the `deepseek-flash` model with
-thinking disabled. Screenshots and images stay local; the OCR helper works on a
+thinking disabled. **Generate card** sends one word and its sentence there too, and
+**Add to Kotoba** sends the edited card to the Kotoba site; Kotoba lookups are local. Screenshots and images stay local; the OCR helper works on a
 private temporary file that is deleted afterwards. Keys and article text are never
 logged, and provider error bodies are never shown.
 
@@ -186,6 +215,9 @@ Use within the terms of your magazine subscription.
 | "Open a Rakuten Magazine reader tab…" | The extension only works on `magazine.rakuten.co.jp/read/…`. |
 | "Exit reader fullscreen…" | Leave the magazine's fullscreen mode, then click again. |
 | Nothing happens after moving the repo or upgrading Node | Re-run `node host/install.mjs`. |
+| "Kotoba is not connected" | `node host/install.mjs --kotoba /path/to/kotoba` |
+| "No local library at …" | In the Kotoba repository: `node extension/host/build-library.mjs` |
+| "No ingest token" when adding a card | Put `KOTOBA_INGEST_TOKEN` in the Kotoba repository's `.env`. |
 
 `node host/install.mjs --check` shows what's installed and where the key was found.
 To test OCR (and optionally DeepSeek) without Chrome:
@@ -199,7 +231,7 @@ node host/check-image.mjs /path/to/page.png --summarize  # also calls DeepSeek
 
 ```
 chrome/   the extension: background worker, overlay (content.js), summary parser, icons
-host/     native messaging host (Node.js): OCR, DeepSeek, archive, installer
+host/     native messaging host (Node.js): OCR, DeepSeek, archive, Kotoba bridge, installer
 ocr/      Swift source of the OCR helper (built to bin/ocr)
 tests/    node:test suites and a browser UI fixture
 ```

@@ -21,6 +21,7 @@ window.chrome = { storage, runtime: {
   sendMessage: async message => {
     if (message.type === "cancel") { clearTimeout(fixtureTimer); return { ok: true }; }
     if (message.type === "reset") { await startCapture(); return { ok: true }; }
+    if (message.type === "kotoba") return kotobaFixture(message);
     if (message.type === "capture") {
       let link = document.getElementById("download-crop");
       if (!link) { link = document.createElement("a"); link.id = "download-crop"; link.textContent = "Download synthetic crop"; document.querySelector("header").append(link); }
@@ -37,6 +38,28 @@ window.chrome = { storage, runtime: {
     return { ok: true, id: message.id };
   },
 } };
+const kotobaWords = {
+  負担: { term: "負担", reading: "ふたん", meaning: "burden; charge", match: "term", source: "backup", tags: ["JLPT N1"],
+    examples: [{ japanese: "費用（ひよう）は会社（かいしゃ）が負担（ふたん）する。", english: "The company bears the cost." }],
+    studyGuide: "**負担（ふたん）** — a load you carry, whether cost, work or worry.\n\n**The kanji story:** 負 is to bear on your back; 担 is to shoulder.\n\n**The phrases that make it stick:**\n- 負担が大きい — a heavy burden\n- 費用を負担する — to bear the cost\n\n**Hook:** what you shoulder, you 負担." },
+  両立: { term: "両立", reading: "りょうりつ", meaning: "balancing two things", match: "term", source: "backup", tags: ["JLPT N1"],
+    examples: [{ japanese: "仕事（しごと）と育児（いくじ）を両立（りょうりつ）する。", english: "To balance work and childcare." }], studyGuide: null },
+  試験: { term: "試験", reading: "しけん", meaning: "exam; test", match: "term", source: "backup", tags: ["JLPT N4"], examples: [], studyGuide: null },
+};
+async function kotobaFixture(message) {
+  await new Promise(resolve => setTimeout(resolve, 400));
+  if (message.action === "lookup") return { ok: true, results: message.terms.map(({ term }) => {
+    const lemma = term.replace(/に$/, "").replace(/的$/, "");
+    const word = kotobaWords[term] || kotobaWords[lemma];
+    return { term, lemma: term.replace(/に$/, ""), exact: Boolean(kotobaWords[term]), words: word ? [word] : [] };
+  }) };
+  if (message.action === "draft") return { ok: true, model: "deepseek-flash (UI fixture)", ms: 4800, card: {
+    term: message.lemma || message.term, reading: message.reading, meaning: "drafted meaning (fixture)",
+    examples: [{ japanese: "新（あたら）しい制度（せいど）を導入（どうにゅう）する。", english: "To introduce a new system." },
+      { japanese: "会社（かいしゃ）は在宅（ざいたく）勤務（きんむ）を導入（どうにゅう）した。", english: "The company introduced remote work." }],
+    studyGuide: `**${message.lemma || message.term}（${message.reading}）** — fixture guide.\n\n**Hook:** remember it.` } };
+  return { ok: true, remote: { status: "added", guideSaved: true }, localId: 99999, label: "Web reading" };
+}
 async function startCapture() {
   await deliver({ type: "prepare" });
   const canvas = document.createElement("canvas");
