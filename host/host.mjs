@@ -1,12 +1,21 @@
 /** stdout is exclusively Chrome's framed JSON channel; no document or key logging. */
 import { fileURLToPath } from "node:url";
-import { ask, cleanText, cleanThread, DEFAULT_STYLE, STYLES, summarize } from "./deepseek.mjs";
+import { ask, cleanText, cleanThread, DEFAULT_STYLE, joinParts, MAX_PARTS, STYLES, summarize } from "./deepseek.mjs";
 import { createArchive } from "./archive.mjs";
 import { kotoba } from "./kotoba.mjs";
 import { library } from "./library.mjs";
 import { recognize } from "./ocr.mjs";
 import { extensionId } from "./paths.mjs";
 import { decodeMessages, encodeMessage, MAX_INPUT } from "./protocol.mjs";
+
+export const MAX_BOXES = 12;
+
+/** A capture carries one image, or several boxes read in the order they were drawn. */
+function captureImages({ image, images = [image], firstPart = 1 }) {
+  if (!Array.isArray(images) || !images.length || images.length > MAX_BOXES) throw new Error(`Select between 1 and ${MAX_BOXES} boxes.`);
+  if (!Number.isInteger(firstPart) || firstPart < 1 || firstPart + images.length - 1 > MAX_PARTS) throw new Error("Invalid article part number.");
+  return { images, firstPart };
+}
 
 export async function handle(message, { emit = () => {}, ocr = recognize, llm = summarize, asker = ask, archive = createArchive, vocab = kotoba, books = library, signal } = {}) {
   if (!message || typeof message.id !== "string" || !/^[a-zA-Z0-9-]{1,80}$/.test(message.id)) throw new Error("Invalid request ID.");
@@ -20,13 +29,21 @@ export async function handle(message, { emit = () => {}, ocr = recognize, llm = 
   if (!thread && !Object.hasOwn(STYLES, style)) throw new Error("Unknown summary style.");
   let text = message.text;
   if (message.type === "capture") {
-    emit({ id: message.id, stage: "recognizing" });
-    text = await ocr(message.image, { signal });
+    const { images, firstPart } = captureImages(message), texts = [];
+    for (const [index, image] of images.entries()) {
+      emit({ id: message.id, stage: "recognizing", box: index + 1, boxes: images.length });
+      try { texts.push(await ocr(image, { signal })); }
+      catch (error) {
+        if (images.length > 1 && /^No readable text/.test(error.message)) throw new Error(`Box ${index + 1} has no readable text. Undo it or draw it again.`);
+        throw error;
+      }
+    }
+    text = joinParts(texts, firstPart);
     emit({ id: message.id, stage: "recognized", text });
   }
   text = cleanText(text);
   let saved;
-  try { saved = archive({ id: message.id, type: message.type, mode: message.mode, source: message.source, style, text }); }
+  try { saved = archive({ id: message.id, type: message.type, mode: message.mode, source: message.source, parts: message.parts, style, text }); }
   catch { throw new Error("Could not save OCR locally. Check the magazine-reader data/ folder permissions and disk space."); }
   emit({ id: message.id, stage: "archived", archive: saved.info, text });
   if (message.type === "capture" && message.mode === "ocr") return { text, archive: saved.info };

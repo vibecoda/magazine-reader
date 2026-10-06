@@ -33,6 +33,16 @@ test("archives preserve Japanese, English, source metadata and private file perm
   assert.equal(ARCHIVE_DIR, resolve(ROOT, "data"));
 });
 
+test("archives record which capture each article part came from", t => {
+  const f = fixture(t);
+  const parts = [{ part: 1, capturedAt: "2026-10-04T01:00:00Z" }, { part: 2, capturedAt: "not a date", extra: "dropped" }, null];
+  const saved = f.archive({ id: "parts", type: "summarize", source, parts, text: "本文" });
+  const metadata = JSON.parse(readFileSync(join(saved.info.directory, "metadata.json"), "utf8"));
+  assert.deepEqual(metadata.parts, [{ part: 1, capturedAt: "2026-10-04T01:00:00.000Z" }, { part: 2, capturedAt: null }, { part: null, capturedAt: null }]);
+  const single = f.archive({ id: "single", type: "summarize", source, text: "本文" });
+  assert.equal(JSON.parse(readFileSync(join(single.info.directory, "metadata.json"), "utf8")).parts, undefined);
+});
+
 test("repeated requests get distinct folders and preserve earlier text versions", t => {
   const f = fixture(t), request = { id: "same-id", type: "summarize", source, text: "original" };
   const original = f.archive(request), edited = f.archive({ ...request, text: "edited" });

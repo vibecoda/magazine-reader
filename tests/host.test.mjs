@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { endianness, tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { ask, cleanText, cleanThread, deepseekKey, deepseekKeySource, ENDPOINT, MODEL, STYLES, summarize, systemPrompt } from "../host/deepseek.mjs";
+import { ask, askMessages, cleanText, cleanThread, deepseekKey, deepseekKeySource, ENDPOINT, joinParts, MODEL, STYLES, summarize, systemPrompt } from "../host/deepseek.mjs";
 import { handle } from "../host/host.mjs";
 import { decodeImage, recognize } from "../host/ocr.mjs";
 import { extensionId, HOST_NAME, ROOT } from "../host/paths.mjs";
@@ -141,6 +141,34 @@ test("OCR-only never invokes DeepSeek; summary errors leave the recognized text 
   assert.deepEqual(await handle({ id: "test", type: "capture", image: PNG, mode: "ocr" }, options), { text: "本文", archive: { directory: "fixture" } });
   await assert.rejects(handle({ id: "test", type: "capture", image: PNG, mode: "summary" }, options), /network failed/);
   assert.ok(events.some(e => e.stage === "recognized" && e.text === "本文"));
+});
+
+test("several boxes are recognized in order and joined as numbered parts of one article", async () => {
+  const events = [], seen = [];
+  const options = { emit: e => events.push(e), archive: () => ({ info: {} }),
+    ocr: async image => { seen.push(image); return `本文${seen.length}`; } };
+  const one = await handle({ id: "one", type: "capture", image: PNG, mode: "ocr" }, options);
+  assert.equal(one.text, "本文1");
+  seen.length = 0;
+  const boxes = await handle({ id: "two", type: "capture", images: [PNG, `${PNG}#2`], mode: "ocr" }, options);
+  assert.deepEqual(seen, [PNG, `${PNG}#2`]);
+  assert.equal(boxes.text, "――― Part 1 ―――\n本文1\n\n――― Part 2 ―――\n本文2");
+  assert.deepEqual(events.filter(e => e.id === "two" && e.stage === "recognizing").map(e => [e.box, e.boxes]), [[1, 2], [2, 2]]);
+  seen.length = 0;
+  const later = await handle({ id: "three", type: "capture", images: [PNG], firstPart: 3, mode: "ocr" }, options);
+  assert.equal(later.text, "――― Part 3 ―――\n本文1");
+  assert.equal(joinParts(["a"]), "a");
+  await assert.rejects(handle({ id: "x", type: "capture", images: [], mode: "ocr" }, options), /between 1 and 12/);
+  await assert.rejects(handle({ id: "x", type: "capture", images: Array(13).fill(PNG), mode: "ocr" }, options), /between 1 and 12/);
+  await assert.rejects(handle({ id: "x", type: "capture", images: [PNG], firstPart: 0, mode: "ocr" }, options), /part number/);
+  options.ocr = async image => { if (image.endsWith("#2")) throw new Error("No readable text. Select a larger or clearer region."); return "本文"; };
+  await assert.rejects(handle({ id: "x", type: "capture", images: [PNG, `${PNG}#2`], mode: "ocr" }, options), /Box 2 has no readable text/);
+  await assert.rejects(handle({ id: "x", type: "capture", images: [`${PNG}#2`], mode: "ocr" }, options), /^Error: No readable text/);
+});
+
+test("prompts explain the part markers for summaries and questions", () => {
+  for (const style of Object.keys(STYLES)) assert.match(systemPrompt(style), /――― Part 2 ―――[\s\S]*one continuous article/);
+  assert.match(askMessages("本文", { question: "q", history: [] })[0].content, /one continuous article/);
 });
 
 test("cancelling OCR aborts its executable and removes the temporary screenshot", async () => {

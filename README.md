@@ -102,6 +102,8 @@ The host looks for a key in this order and uses the first it finds:
    with a control bar at the side (**Move to left/right** switches sides). Choose a
    **Summary style** there.
 3. Drag a rectangle around a page, article, or text column, or click **Whole viewport**.
+   For columns, sidebars or boxes, draw several rectangles: they are numbered and read in
+   the order you draw them (up to 12). **Undo box** removes the last one.
 4. **Summarize selection** runs OCR on your Mac and sends only the recognized text to
    DeepSeek. **OCR only** stops after recognition and sends nothing anywhere.
 5. The result opens in a reader over the dimmed page. Tabs across the top switch
@@ -124,6 +126,17 @@ The host looks for a key in this order and uses the first it finds:
 6. To turn the page, click **New capture**. The overlay shrinks to a small bar so you
    can use the magazine normally; click **Capture page** when you're on the page you
    want, or **Back** to return to the last result.
+7. When an article continues on another page or in another box, click **+ Add part**
+   instead. Turn the page, click **Capture page**, select the continuation, and click
+   **Add to article**. Repeat as needed. **Add to article** only reads the text on
+   your Mac; summarize from the reader once the article is complete.
+
+**Articles in several parts** — each box or page becomes a part, headed in the Japanese
+text by a line such as `――― Part 2 ―――`. DeepSeek is told these are pieces of one
+article in reading order. Delete or reorder parts by editing the text. Adding a part clears
+the results of the shorter article (they're still in `data/`) but keeps the Ask conversation.
+The parts are kept only while the magazine tab is open; **New capture** or closing the
+reader starts over.
 
 **Stocks** — click a code to open its page on Monex's IFIS company data
 (`monex.ifis.co.jp/index.php?sa=find&ta=n&wd=<code>`) in a new tab; it may ask you
@@ -171,7 +184,8 @@ Every request is saved automatically in this repository's `data/` folder
 - `ocr.txt` — the Japanese text that was used, including your edits.
 - `summary.md` — the English output; for **Ask**, the question and answer.
 - `metadata.json` — page URL, capture time and ID, output style (`ask` for
-  questions), model, and whether the output was cut off.
+  questions), model, whether the output was cut off, and, for an article in several
+  parts, when each part was captured (`parts`).
 
 **Library** — browse everything saved here without opening the files: click **Library** in the
 reader's header, or right-click the toolbar button and choose **Options**. Captures are listed
