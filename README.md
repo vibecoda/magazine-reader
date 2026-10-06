@@ -173,6 +173,14 @@ Every request is saved automatically in this repository's `data/` folder
 - `metadata.json` — page URL, capture time and ID, output style (`ask` for
   questions), model, and whether the output was cut off.
 
+**Library** — browse everything saved here without opening the files: click **Library** in the
+reader's header, or right-click the toolbar button and choose **Options**. Captures are listed
+newest first, grouped by day, and the search box looks through both the Japanese text and the
+English output. Opening one shows each style it was summarized in as a tab (with older versions of
+a regenerated style one click away), Ask questions as a conversation, and the Japanese text that
+was used. It reads `data/` through the native host, read-only, and sends nothing anywhere. Keys:
+`/` search, `j` / `k` next and previous capture.
+
 The text is saved **before** DeepSeek is called, so it survives failed or cancelled
 requests. Retries and other styles get their own folders; the shared capture ID in
 `metadata.json` groups them. Screenshots are never saved.
@@ -230,8 +238,8 @@ node host/check-image.mjs /path/to/page.png --summarize  # also calls DeepSeek
 ## Development
 
 ```
-chrome/   the extension: background worker, overlay (content.js), summary parser, icons
-host/     native messaging host (Node.js): OCR, DeepSeek, archive, Kotoba bridge, installer
+chrome/   the extension: background worker, overlay (content.js), Library page, summary parser, icons
+host/     native messaging host (Node.js): OCR, DeepSeek, archive and Library, Kotoba bridge, installer
 ocr/      Swift source of the OCR helper (built to bin/ocr)
 tests/    node:test suites and a browser UI fixture
 ```
@@ -244,7 +252,8 @@ node --check chrome/content.js && node --check chrome/background.js
 `tests/preview.html` exercises the overlay with synthetic Japanese text and mocked
 Chrome / DeepSeek responses — no extension install or API calls. Serve the
 repository root (e.g. `python3 -m http.server 8765`) and open
-`http://localhost:8765/tests/preview.html`.
+`http://localhost:8765/tests/preview.html`. `tests/library-preview.html` does the same for the
+Library page with synthetic saved captures.
 
 After changing extension code, reload it at `chrome://extensions` and refresh the
 magazine tab. Host changes apply on the next request.

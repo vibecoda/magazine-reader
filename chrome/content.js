@@ -662,7 +662,9 @@
     settingsButton = button("Aa", () => toggleSettings(), "icon-button");
     settingsButton.setAttribute("aria-label", "Reading settings"); settingsButton.title = "Typeface, size, spacing, width, theme";
     const closeButton = button("×", close, "icon-button close"); closeButton.setAttribute("aria-label", "Close reader");
-    tools.append(settingsButton, closeButton); header.append(brand, tools);
+    const libraryButton = button("Library", () => void ask({ type: "library" }).catch(() => {}), "icon-button");
+    libraryButton.title = "Browse saved captures in a new tab";
+    tools.append(libraryButton, settingsButton, closeButton); header.append(brand, tools);
     const tabs = node("div", "style-tabs"); tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", "Summary style or questions");
     tabButtons = Object.entries(TABS).map(([key, [label, description]], index) => {
       const tab = button(label, () => chooseStyle(key), "style-tab");

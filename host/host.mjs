@@ -3,14 +3,17 @@ import { fileURLToPath } from "node:url";
 import { ask, cleanText, cleanThread, DEFAULT_STYLE, STYLES, summarize } from "./deepseek.mjs";
 import { createArchive } from "./archive.mjs";
 import { kotoba } from "./kotoba.mjs";
+import { library } from "./library.mjs";
 import { recognize } from "./ocr.mjs";
 import { extensionId } from "./paths.mjs";
 import { decodeMessages, encodeMessage, MAX_INPUT } from "./protocol.mjs";
 
-export async function handle(message, { emit = () => {}, ocr = recognize, llm = summarize, asker = ask, archive = createArchive, vocab = kotoba, signal } = {}) {
+export async function handle(message, { emit = () => {}, ocr = recognize, llm = summarize, asker = ask, archive = createArchive, vocab = kotoba, books = library, signal } = {}) {
   if (!message || typeof message.id !== "string" || !/^[a-zA-Z0-9-]{1,80}$/.test(message.id)) throw new Error("Invalid request ID.");
   // Vocabulary cards: nothing is archived, and the only reply is the final one.
   if (message.type === "kotoba") return vocab(message);
+  // The Library page: read-only, and nothing leaves the Mac.
+  if (message.type === "library") return books(message);
   if (!["summarize", "ask"].includes(message.type) && (message.type !== "capture" || !["ocr", "summary"].includes(message.mode))) throw new Error("Unknown request.");
   const thread = message.type === "ask" ? cleanThread(message) : null;
   const style = thread ? "ask" : message.style ?? DEFAULT_STYLE;

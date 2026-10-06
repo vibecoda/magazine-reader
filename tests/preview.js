@@ -22,6 +22,7 @@ window.chrome = { storage, runtime: {
     if (message.type === "cancel") { clearTimeout(fixtureTimer); return { ok: true }; }
     if (message.type === "reset") { await startCapture(); return { ok: true }; }
     if (message.type === "kotoba") return kotobaFixture(message);
+    if (message.type === "library") { window.open("library-preview.html"); return { ok: true }; }
     if (message.type === "capture") {
       let link = document.getElementById("download-crop");
       if (!link) { link = document.createElement("a"); link.id = "download-crop"; link.textContent = "Download synthetic crop"; document.querySelector("header").append(link); }

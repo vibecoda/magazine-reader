@@ -68,6 +68,10 @@ async function request(message, sender) {
   if (sender.id !== chrome.runtime.id || sender.frameId !== 0 || !sender.tab || !supported(sender.url))
     throw new Error("Requests must come from the active reader overlay.");
   const tabId = sender.tab.id;
+  if (message.type === "library") {
+    await chrome.tabs.create({ url: chrome.runtime.getURL("library.html"), index: sender.tab.index + 1, openerTabId: tabId });
+    return { ok: true };
+  }
   if (message.type === "reset") {
     const tab = await chrome.tabs.get(tabId);
     await assertActive(tab);
