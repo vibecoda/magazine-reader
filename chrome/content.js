@@ -18,6 +18,9 @@
   const SUGGESTIONS = ["What is this article mainly about?", "Explain the key numbers and what they mean",
     "What are the implications for investors?", "Explain the difficult Japanese terms", "What is unclear or missing in this excerpt?"];
   const MAX_TURNS = 8;
+  // Heads each part of an article collected across boxes or pages. Keep in step with partMarker in host/deepseek.mjs.
+  const PART = /^――― Part (\d+) ―――$/gm, partMarker = number => `――― Part ${number} ―――`;
+  const MAX_BOXES = 12, MAX_TEXT = 60_000;
   const FONTS = {
     serif: ["Serif", `"Iowan Old Style","Charter","Georgia","Hiragino Mincho ProN",serif`],
     sans: ["Sans", `system-ui,-apple-system,"Helvetica Neue","Hiragino Sans",sans-serif`],
@@ -56,7 +59,9 @@
     button:hover{background:#30485c}button:disabled{opacity:.45;cursor:not-allowed}.primary{background:#c6ee98;color:#183019;border:0;font-weight:650}.primary:hover{background:#d9f6b7}
     .selection{position:fixed;inset:0;pointer-events:auto;touch-action:none;cursor:crosshair;background:#14202c}
     .snapshot{position:absolute;inset:0;width:100%;height:100%;object-fit:fill;pointer-events:none}
-    .rect{position:absolute;border:2px solid #c6ee98;box-shadow:0 0 0 200vmax #0009;pointer-events:none;display:none}
+    .shade{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+    .rect{position:absolute;border:2px solid #c6ee98;pointer-events:none}.rect.draft{border-style:dashed}
+    .rect span{position:absolute;top:-2px;left:-2px;background:#c6ee98;color:#183019;font:700 12px/1 system-ui,sans-serif;padding:4px 7px;border-radius:0 0 6px 0}
     .toolbar{position:fixed;right:14px;top:14px;width:min(232px,calc(100vw - 28px));max-height:calc(100vh - 28px);overflow:auto;padding:14px;cursor:auto;pointer-events:auto;border-radius:14px;box-shadow:0 8px 36px #0008;background:#13202df5;border:1px solid #415263}
     .toolbar[data-side="left"]{left:14px;right:auto}.toolbar .actions{flex-direction:column}.toolbar .actions button{width:100%}.side-switch{width:100%;margin:9px 0;font-size:12px;padding:6px 9px}
     .toolbar label{display:block;margin-top:12px;font-size:11px;font-weight:600;letter-spacing:.4px;color:#b3c0cb}
@@ -163,15 +168,18 @@
     @media(max-width:600px){.toolbar{padding:12px}button{padding:8px 10px}.reader{padding:6px}.panel-body{padding:18px}.settings{grid-template-columns:1fr}}
   `;
   root.append(style);
-  let ui = null, capture = null, image = null, region = null, busy = false, jobId = null, jobStyle = null;
+  let ui = null, capture = null, image = null, regions = [], busy = false, jobId = null, jobStyle = null;
   let resetting = false, archiveInfo = null, settingsOpen = false;
-  let ocrText = "", cropped = "", activeStyle = DEFAULTS.style;
+  let ocrText = "", crops = [], activeStyle = DEFAULTS.style;
+  // An article can be collected from several boxes and pages before it is summarized.
+  let parts = []; // { part, capturedAt } for each part recognized so far
+  let appending = false, jobBase = null, jobParts = null; // jobBase: the article text a running capture adds to
   const summaries = new Map(); // style → { text, source, truncated }
   const thread = []; // { question, answer?, error?, truncated? }; at most one turn is pending
   const vocab = new Map(); // "term|reading" → the word's Kotoba state for this capture; see vocabEntry
   let askNode = null, threadNode = null, askInput = null, askButton = null, suggestionsNode = null, clearButton = null;
   let panel = null, panelStatus = null, summaryNode = null, skeleton = null, readingLabel = null, textArea = null, archiveNode = null, kotobaCount = null;
-  let summarizeButton = null, copyButton = null, cancelButton = null, settingsButton = null, settingsSheet = null, tabButtons = [];
+  let captureNode = null, addPartButton = null, summarizeButton = null, copyButton = null, cancelButton = null, settingsButton = null, settingsSheet = null, tabButtons = [];
   const syncers = [];
   const node = (tag, className, text) => {
     const e = document.createElement(tag); if (className) e.className = className;
@@ -183,11 +191,18 @@
   const isReader = () => ui?.classList.contains("reader");
   const current = () => summaries.get(activeStyle);
   const ask = payload => chrome.runtime.sendMessage({ channel: CHANNEL, token: capture?.token, ...payload });
+  const partNumbers = text => [...text.matchAll(PART)].map(match => Number(match[1]));
+  const partCount = () => partNumbers(ocrText).length || (ocrText.trim() ? 1 : 0);
+  const nextPart = () => { const numbers = partNumbers(ocrText); return numbers.length ? Math.max(...numbers) + 1 : ocrText.trim() ? 2 : 1; };
   function resetUI(next) { if (ui) ui.remove(); ui = next; root.append(ui); host.style.display = "block"; }
-  function close() {
+  function hide() {
     if (capture) void ask({ type: "cancel" }).catch(() => {});
-    busy = false; jobId = null; host.style.display = "none";
+    busy = false; jobId = null; jobBase = null; jobParts = null; host.style.display = "none";
   }
+  function close() { appending = false; hide(); }
+  // Turning the page for the next part keeps the article; the next capture adds to it.
+  function addPart() { standby(); appending = true; paintStandby(); }
+  function backToArticle() { appending = false; showPanel(); updateBusy(false); setStatus(""); }
   async function restartCapture() {
     if (resetting) return;
     resetting = true; busy = false; jobId = null;
@@ -201,19 +216,24 @@
   function standby() {
     if (busy && capture) void ask({ type: "cancel" }).catch(() => {});
     if (busy) setStatus("Cancelled. Recognized text is retained.");
-    updateBusy(false); jobId = null; jobStyle = null; toggleSettings(false);
+    updateBusy(false); jobId = null; jobStyle = null; jobBase = null; jobParts = null; appending = false; toggleSettings(false);
     const previous = isReader() ? ui : null;
     const bar = node("section", "standby"); bar.dataset.side = settings.toolbarSide;
     bar.setAttribute("role", "region"); bar.setAttribute("aria-label", "Magazine Reader: ready for a new capture");
     const actions = node("div", "actions");
     actions.append(button("Capture page", () => void restartCapture(), "primary"));
-    if (previous) actions.append(button("Back", () => { resetUI(previous); updateBusy(false); }));
+    if (previous) actions.append(button("Back", () => { appending = false; resetUI(previous); updateBusy(false); }));
     actions.append(button("×", close, "standby-close"));
     actions.lastChild.setAttribute("aria-label", "Close Magazine Reader");
-    bar.append(node("div", "muted", "Turn to the page you want, then capture it."), actions);
-    resetUI(bar);
+    bar.append(node("div", "muted standby-hint"), actions);
+    resetUI(bar); paintStandby();
     // Leave keyboard focus with the page so its own page-turn keys keep working.
     root.activeElement?.blur();
+  }
+
+  function paintStandby() {
+    const hint = ui?.querySelector(".standby-hint");
+    if (hint) hint.textContent = appending ? `Turn to where the article continues, then capture part ${nextPart()}.` : "Turn to the page you want, then capture it.";
   }
 
   function saveSettings(patch) {
@@ -293,6 +313,11 @@
     const copyable = asking ? thread.some(turn => turn.answer) : Boolean(entry);
     if (copyButton) { copyButton.disabled = !copyable; copyButton.hidden = !copyable || value; copyButton.title = asking ? "Copy the conversation" : "Copy without the limitations note"; }
     if (cancelButton) cancelButton.hidden = !value;
+    if (addPartButton) { addPartButton.disabled = value || !ocrText.trim(); addPartButton.title = `Capture part ${nextPart()} from another box or page`; }
+    if (captureNode && capture) {
+      const time = new Date(capture.capturedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), count = partCount();
+      captureNode.textContent = count > 1 ? `Article in ${count} parts · last captured at ${time}` : `Captured at ${time} · reading this snapshot`;
+    }
     if (textArea) textArea.disabled = value;
     if (skeleton) skeleton.hidden = !value || asking;
     if (summaryNode) summaryNode.hidden = value || asking;
@@ -633,15 +658,16 @@
     if (summaries.has(key) || !ocrText.trim()) { setStatus(""); return; }
     void submit({ type: "summarize", text: ocrText, style: key });
   }
-  async function submit(payload) {
+  async function submit(payload, { base = null, added = null } = {}) {
     const id = crypto.randomUUID();
     updateArchive(null);
+    jobBase = base; jobParts = added;
     jobId = id; jobStyle = payload.type === "ask" ? "ask" : payload.mode === "ocr" ? null : payload.style; updateBusy(true);
     if (copyButton) copyButton.textContent = "Copy";
     setStatus(payload.type === "capture" ? "Reading Japanese text locally…" : payload.type === "ask" ? ""
       : `Creating ${STYLES[payload.style][2].toLowerCase()} with DeepSeek…`);
     try {
-      const response = await ask({ ...payload, id });
+      const response = await ask({ parts: added ? [...parts, ...added] : parts, ...payload, id });
       if (!response?.ok) throw new Error(response?.error || "The extension did not respond.");
     } catch (error) {
       if (jobId !== id) return;
@@ -676,7 +702,7 @@
       const max = body.scrollHeight - body.clientHeight;
       bar.style.width = `${max > 0 ? Math.round(body.scrollTop / max * 100) : 0}%`;
     }, { passive: true });
-    body.append(node("div", "capture-time", capture ? `Captured at ${new Date(capture.capturedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · reading this snapshot` : ""));
+    captureNode = node("div", "capture-time"); body.append(captureNode);
     panelStatus = node("div", "status", "Ready"); panelStatus.setAttribute("role", "status"); panelStatus.setAttribute("aria-live", "polite"); body.append(panelStatus);
     readingLabel = node("div", "reading-label"); body.append(readingLabel);
     skeleton = node("div", "skeleton"); skeleton.setAttribute("aria-hidden", "true");
@@ -703,9 +729,12 @@
     const details = node("details"); details.append(node("summary", "", "Japanese text · review or edit"));
     textArea = node("textarea"); textArea.setAttribute("aria-label", "Japanese OCR text"); textArea.lang = "ja"; textArea.maxLength = 60_000; textArea.value = ocrText;
     textArea.addEventListener("input", () => { ocrText = textArea.value; updateBusy(busy); }); details.append(textArea); body.append(details);
-    if (cropped) {
-      const source = node("details"); source.append(node("summary", "", "Captured region"));
-      const preview = node("img", "preview"); preview.src = cropped; preview.alt = "Captured region being summarized"; source.append(preview); body.append(source);
+    if (crops.length) {
+      const source = node("details"); source.append(node("summary", "", crops.length > 1 ? `Captured regions (${crops.length})` : "Captured region"));
+      crops.forEach((crop, index) => {
+        const preview = node("img", "preview"); preview.src = crop; preview.alt = `Captured region ${index + 1}`; source.append(preview);
+      });
+      body.append(source);
     }
     panel.append(body);
     const actions = node("div", "actions");
@@ -727,10 +756,11 @@
     });
     cancelButton = button("Cancel", () => {
       void ask({ type: "cancel" }).catch(() => {});
-      const asking = jobStyle === "ask"; jobId = null; jobStyle = null; updateBusy(false);
+      const asking = jobStyle === "ask"; jobId = null; jobStyle = null; jobBase = null; jobParts = null; updateBusy(false);
       if (asking) failQuestion("Cancelled."); else setStatus("Cancelled. Recognized text is retained.");
     });
-    actions.append(button("New capture", standby), node("span", "spacer"), cancelButton, copyButton, summarizeButton);
+    addPartButton = button("+ Add part", addPart);
+    actions.append(button("New capture", standby), addPartButton, node("span", "spacer"), cancelButton, copyButton, summarizeButton);
     archiveNode = node("span", "archive-status"); archiveNode.setAttribute("role", "status"); updateArchive(archiveInfo);
     const footnote = node("div", "footnote"); footnote.append(archiveNode, node("span", "", "Summaries and questions send text to DeepSeek. Images stay on this Mac."));
     const bottom = node("div", "panel-bottom"); bottom.append(actions, footnote); panel.append(bottom);
@@ -739,87 +769,129 @@
     closeButton.focus({ preventScroll: true });
   }
   function selectionUI() {
+    const adding = appending, first = adding ? nextPart() : 1;
     const selection = node("div", "selection");
     selection.setAttribute("role", "dialog"); selection.setAttribute("aria-label", "Select a magazine region"); selection.setAttribute("aria-modal", "true");
     const snapshot = node("img", "snapshot"); snapshot.src = capture.image; snapshot.alt = "Select text from this captured magazine spread"; selection.append(snapshot);
-    const rect = node("div", "rect"); selection.append(rect);
+    const shade = node("canvas", "shade"), boxes = node("div");
+    shade.width = window.innerWidth; shade.height = window.innerHeight; selection.append(shade, boxes);
     const toolbar = node("section", "toolbar"); toolbar.dataset.side = settings.toolbarSide;
     const sideSwitch = button("", () => {
       saveSettings({ toolbarSide: settings.toolbarSide === "right" ? "left" : "right" });
       toolbar.dataset.side = settings.toolbarSide; sideSwitch.textContent = `Move to ${settings.toolbarSide === "right" ? "left" : "right"}`;
     }, "side-switch");
     sideSwitch.textContent = `Move to ${settings.toolbarSide === "right" ? "left" : "right"}`;
-    toolbar.append(node("h2", "", "Select a page or article"), sideSwitch,
-      node("div", "muted", "Drag a rectangle around the Japanese text. Zoom the reader before capturing if the type is small. Escape cancels."));
-    const label = node("label", "", "Summary style"), picker = node("select"), hint = node("div", "muted");
-    for (const [key, [name]] of Object.entries(STYLES)) {
-      const option = node("option", "", name); option.value = key; picker.append(option);
+    toolbar.append(node("h2", "", adding ? `Add part ${first} to the article` : "Select a page or article"), sideSwitch,
+      node("div", "muted", "Drag a rectangle around the Japanese text. For columns or boxes, draw several: they are read in the order you draw them. Zoom the reader before capturing if the type is small."));
+    if (!adding) {
+      const label = node("label", "", "Summary style"), picker = node("select"), hint = node("div", "muted");
+      for (const [key, [name]] of Object.entries(STYLES)) {
+        const option = node("option", "", name); option.value = key; picker.append(option);
+      }
+      const pick = () => { hint.textContent = STYLES[picker.value][1]; };
+      picker.value = settings.style; pick();
+      picker.addEventListener("change", () => { saveSettings({ style: picker.value }); pick(); });
+      label.append(picker); toolbar.append(label, hint);
+      hint.style.marginTop = "5px";
     }
-    const pick = () => { hint.textContent = STYLES[picker.value][1]; };
-    picker.value = settings.style; pick();
-    picker.addEventListener("change", () => { saveSettings({ style: picker.value }); pick(); });
-    label.append(picker); toolbar.append(label, hint);
-    hint.style.marginTop = "5px";
     const actions = node("div", "actions");
+    const crop = region => {
+      const sx = image.naturalWidth / window.innerWidth, sy = image.naturalHeight / window.innerHeight;
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(region.width * sx)); canvas.height = Math.max(1, Math.round(region.height * sy));
+      canvas.getContext("2d").drawImage(image, region.x * sx, region.y * sy, region.width * sx, region.height * sy, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL("image/png");
+    };
     const process = async mode => {
-      if (!region) return;
+      if (!regions.length) return;
       try {
-        const sx = image.naturalWidth / window.innerWidth, sy = image.naturalHeight / window.innerHeight;
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.max(1, Math.round(region.width * sx)); canvas.height = Math.max(1, Math.round(region.height * sy));
-        canvas.getContext("2d").drawImage(image, region.x * sx, region.y * sy, region.width * sx, region.height * sy, 0, 0, canvas.width, canvas.height);
-        cropped = canvas.toDataURL("image/png"); ocrText = ""; summaries.clear(); thread.length = 0; vocab.clear(); activeStyle = settings.style;
-        showPanel(); await submit({ type: "capture", image: cropped, mode, style: activeStyle });
+        const images = regions.map(crop);
+        const added = images.map((_, index) => ({ part: first + index, capturedAt: capture.capturedAt }));
+        // The first part gets its own heading once a second one joins it.
+        const base = adding && ocrText.trim() ? (partNumbers(ocrText).length ? ocrText.trim() : `${partMarker(1)}\n${ocrText.trim()}`) : null;
+        if (!adding) { ocrText = ""; summaries.clear(); thread.length = 0; vocab.clear(); crops = []; parts = []; activeStyle = settings.style; }
+        crops.push(...images); appending = false;
+        showPanel();
+        await submit({ type: "capture", images, firstPart: first, mode: adding ? "ocr" : mode, style: activeStyle }, { base, added });
       } catch (error) { showPanel(); updateBusy(false); setStatus(error.message, true); }
     };
     const summarize = button("Summarize selection", () => void process("summary"), "primary");
     const recognize = button("OCR only", () => void process("ocr"));
-    summarize.disabled = true; recognize.disabled = true;
-    const paint = () => {
-      rect.style.display = "block";
-      Object.assign(rect.style, { left: `${region.x}px`, top: `${region.y}px`, width: `${region.width}px`, height: `${region.height}px` });
-      summarize.disabled = region.width < 12 || region.height < 12; recognize.disabled = summarize.disabled;
+    const add = button("Add to article", () => void process("ocr"), "primary");
+    const undo = button("Undo box", () => { regions.pop(); paint(); });
+    const count = node("div", "muted"); count.style.marginTop = "10px";
+    const paint = (draft = null) => {
+      const context = shade.getContext("2d"), shown = draft ? [...regions, draft] : regions;
+      context.clearRect(0, 0, shade.width, shade.height);
+      if (shown.length) {
+        context.fillStyle = "#0009"; context.fillRect(0, 0, shade.width, shade.height);
+        for (const r of shown) context.clearRect(r.x, r.y, r.width, r.height);
+      }
+      boxes.replaceChildren(...shown.map((r, index) => {
+        const rect = node("div", r === draft ? "rect draft" : "rect");
+        Object.assign(rect.style, { left: `${r.x}px`, top: `${r.y}px`, width: `${r.width}px`, height: `${r.height}px` });
+        if (r !== draft && (adding || regions.length > 1)) rect.append(node("span", "", String(adding ? first + index : index + 1)));
+        return rect;
+      }));
+      for (const b of [summarize, recognize, add]) b.disabled = !regions.length;
+      undo.disabled = !regions.length;
+      count.textContent = regions.length >= MAX_BOXES ? `${MAX_BOXES} boxes is the most for one capture.`
+        : regions.length > 1 ? `${regions.length} boxes, read in the numbered order.` : "";
     };
-    const whole = button("Whole viewport", () => { region = { x: 0, y: 0, width: window.innerWidth, height: window.innerHeight }; paint(); });
-    actions.append(summarize, recognize, whole, button("New capture", standby), button("Cancel", close));
-    toolbar.append(actions, node("div", "muted", "Summarize sends recognized text to DeepSeek. OCR only stays on this Mac.")); selection.append(toolbar);
-    let start = null;
+    const whole = button("Whole viewport", () => { regions = [{ x: 0, y: 0, width: window.innerWidth, height: window.innerHeight }]; paint(); });
+    if (adding) actions.append(add, whole, undo, button("Back to article", backToArticle));
+    else actions.append(summarize, recognize, whole, undo, button("New capture", standby), button("Cancel", close));
+    toolbar.append(count, actions, node("div", "muted", adding ? "Adding only reads the text on this Mac. Summarize the whole article from the reader."
+      : "Summarize sends recognized text to DeepSeek. OCR only stays on this Mac; add more parts from the reader."));
+    selection.append(toolbar);
+    let start = null, draft = null;
     selection.addEventListener("pointerdown", event => {
-      if (toolbar.contains(event.target) || event.button !== 0) return;
+      if (toolbar.contains(event.target) || event.button !== 0 || regions.length >= MAX_BOXES) return;
       start = { x: event.clientX, y: event.clientY }; selection.setPointerCapture(event.pointerId); event.preventDefault();
     });
     selection.addEventListener("pointermove", event => {
       if (!start) return;
       const x = Math.max(0, Math.min(window.innerWidth, event.clientX)), y = Math.max(0, Math.min(window.innerHeight, event.clientY));
-      region = { x: Math.min(start.x, x), y: Math.min(start.y, y), width: Math.abs(x - start.x), height: Math.abs(y - start.y) }; paint();
+      draft = { x: Math.min(start.x, x), y: Math.min(start.y, y), width: Math.abs(x - start.x), height: Math.abs(y - start.y) }; paint(draft);
     });
-    selection.addEventListener("pointerup", () => { start = null; });
-    selection.addEventListener("pointercancel", () => { start = null; });
-    resetUI(selection); whole.focus({ preventScroll: true });
+    const finish = () => {
+      if (draft && draft.width >= 12 && draft.height >= 12) regions.push(draft);
+      start = null; draft = null; paint();
+    };
+    selection.addEventListener("pointerup", finish);
+    selection.addEventListener("pointercancel", () => { start = null; draft = null; paint(); });
+    paint(); resetUI(selection); whole.focus({ preventScroll: true });
   }
   async function onMessage(message) {
     if (message.type === "prepare") {
-      close();
+      hide();
       if (document.fullscreenElement) return { ok: false, error: "Exit reader fullscreen, then click the extension again." };
       await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       return { ok: true };
     }
     if (message.type === "select") {
       await settingsReady;
-      capture = message; region = null; ocrText = ""; summaries.clear(); thread.length = 0; vocab.clear(); cropped = ""; jobId = null; jobStyle = null; busy = false; archiveInfo = null;
-      activeStyle = settings.style; settingsOpen = false;
+      // While adding a part, the article so far (text, results, conversation) carries over to this capture.
+      if (!appending || !ocrText.trim()) {
+        appending = false; ocrText = ""; summaries.clear(); thread.length = 0; vocab.clear(); crops = []; parts = []; archiveInfo = null;
+        activeStyle = settings.style; settingsOpen = false;
+      }
+      capture = message; regions = []; jobId = null; jobStyle = null; jobBase = null; jobParts = null; busy = false;
       image = new Image(); image.src = capture.image; await image.decode(); selectionUI(); return { ok: true };
     }
     if (message.type === "error") { await settingsReady; showPanel(); updateBusy(false); setStatus(message.error, true); return { ok: true }; }
     if (message.type !== "progress" || message.token !== capture?.token || !busy || message.id !== jobId) return { ok: true };
     if (message.archive) updateArchive(message.archive);
-    if (typeof message.text === "string") { ocrText = message.text; textArea.value = ocrText; }
-    if (message.stage === "recognizing") setStatus("Reading Japanese text locally…");
+    if (typeof message.text === "string") { ocrText = jobBase ? `${jobBase}\n\n${message.text}` : message.text; textArea.value = ocrText; }
+    if (message.stage === "recognized" && jobParts) { parts.push(...jobParts); jobParts = null; }
+    if (message.stage === "recognizing") setStatus(message.boxes > 1 ? `Reading Japanese text locally… box ${message.box} of ${message.boxes}` : "Reading Japanese text locally…");
     if (message.stage === "recognized") setStatus("Japanese text recognized.");
     if (message.stage === "summarizing" && jobStyle && jobStyle !== "ask") setStatus(`Creating ${STYLES[jobStyle][2].toLowerCase()} with DeepSeek…`);
     if (message.done) {
-      const style = jobStyle;
-      jobId = null; jobStyle = null;
+      const style = jobStyle, added = jobParts, appended = jobBase !== null;
+      jobId = null; jobStyle = null; jobBase = null; jobParts = null;
+      // Boxes whose text never arrived are not part of the article.
+      if (added) { if (message.ok && typeof message.text === "string") parts.push(...added); else crops.splice(-added.length); }
       if (style === "ask") {
         if (!message.ok || typeof message.answer !== "string") { failQuestion(message.error || "DeepSeek did not answer."); return { ok: true }; }
         Object.assign(thread.at(-1), { answer: message.answer, truncated: Boolean(message.truncated) });
@@ -831,8 +903,15 @@
         summaries.set(style, { text: message.summary, source: ocrText, truncated: Boolean(message.truncated) });
         activeStyle = style; updateBusy(false); renderSummary();
         setStatus(message.truncated ? "This reached the output limit. Select a smaller excerpt or a shorter style." : "");
+      } else if (appended) {
+        // Results for the shorter text are kept in data/, but no longer describe the article.
+        summaries.clear(); vocab.clear(); renderSummary(); updateBusy(false);
+        setStatus(ocrText.length > MAX_TEXT
+          ? `The article is now over ${MAX_TEXT.toLocaleString("en")} characters, too long to send. Remove some text below.`
+          : `Added. The article now has ${partCount()} parts. Add another, or pick a style above to read the whole article.`, ocrText.length > MAX_TEXT);
+        ui.querySelector("details").open = true;
       } else {
-        updateBusy(false); setStatus("OCR complete. Review the Japanese text, then pick a style above or summarize.");
+        updateBusy(false); setStatus("OCR complete. Review the Japanese text. Add a part if the article continues elsewhere, or pick a style above.");
         ui.querySelector("details").open = true;
       }
     }
@@ -854,7 +933,8 @@
   document.addEventListener("keydown", event => {
     if (host.style.display === "none" || event.isComposing) return;
     if (event.key === "Escape") {
-      if (isReader() && settingsOpen) toggleSettings(false); else close();
+      if (isReader() && settingsOpen) toggleSettings(false);
+      else if (ui?.className === "selection" && appending) backToArticle(); else close();
       event.stopPropagation(); return;
     }
     const modal = ui?.className === "selection" || (isReader() && settings.layout === "center");
@@ -869,5 +949,6 @@
     else return;
     event.preventDefault(); event.stopPropagation();
   }, true);
-  window.addEventListener("resize", () => { if (ui?.className === "selection") { close(); } });
+  // The screenshot no longer matches the page; an article being collected goes back to the reader.
+  window.addEventListener("resize", () => { if (ui?.className === "selection") { if (appending) backToArticle(); else close(); } });
 })();

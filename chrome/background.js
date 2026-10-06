@@ -83,9 +83,16 @@ async function request(message, sender) {
   if (!["capture", "summarize", "ask"].includes(message.type)) throw new Error("Unknown overlay request.");
   if (typeof message.id !== "string" || !/^[a-zA-Z0-9-]{1,80}$/.test(message.id)) throw new Error("Invalid request ID.");
   if (jobs.has(tabId)) throw new Error("A request is already running.");
-  if (message.type === "capture" && (!/^data:image\/png;base64,/.test(message.image || "")
-    || message.image.length > 28 * 1024 * 1024 || !["ocr", "summary"].includes(message.mode)))
+  const images = message.type === "capture" ? message.images : [];
+  if (message.type === "capture" && (!Array.isArray(images) || !images.length || images.length > 12
+    || !images.every(image => typeof image === "string" && /^data:image\/png;base64,/.test(image))
+    || images.reduce((total, image) => total + image.length, 0) > 28 * 1024 * 1024 || !["ocr", "summary"].includes(message.mode)))
     throw new Error("Invalid or oversized screenshot.");
+  if (message.firstPart !== undefined && (!Number.isInteger(message.firstPart) || message.firstPart < 1 || message.firstPart > 99))
+    throw new Error("Invalid article part number.");
+  // The native host cleans part metadata; this only bounds what is forwarded.
+  if (message.parts !== undefined && (!Array.isArray(message.parts) || message.parts.length > 99 || JSON.stringify(message.parts).length > 16_384))
+    throw new Error("Invalid article parts.");
   if (message.type === "ask" && (typeof message.question !== "string" || !message.question.trim()
     || message.question.length > 2000 || !Array.isArray(message.history ?? []) || (message.history ?? []).length > 8))
     throw new Error("Ask a question of up to 2,000 characters.");
@@ -116,12 +123,12 @@ async function request(message, sender) {
   job.timer = setTimeout(() => {
     void deliver({ id, done: true, ok: false, error: "Processing timed out. Try a smaller region." });
     finish();
-  }, 130_000);
+  }, 130_000 + 15_000 * Math.max(0, images.length - 1));
   try {
     port.postMessage({ id, type: message.type, style: message.style,
-      source: { url: capture.url, capturedAt: capture.capturedAt, captureId: capture.token },
+      source: { url: capture.url, capturedAt: capture.capturedAt, captureId: capture.token }, parts: message.parts,
       ...(message.type === "capture"
-      ? { image: message.image, mode: message.mode }
+      ? { images, mode: message.mode, firstPart: message.firstPart }
       : message.type === "ask" ? { text: message.text, question: message.question, history: message.history ?? [] }
         : { text: message.text }) });
   } catch (error) { finish(); throw error; }

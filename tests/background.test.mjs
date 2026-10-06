@@ -83,7 +83,7 @@ test("only the current request may deliver progress; navigation disconnects the 
 
 test("missing host errors are actionable and don't leave a live request", async () => {
   const f = fixture(); await f.click(); const token = f.store["capture-1"].token;
-  await f.ask({ type: "capture", mode: "ocr", image: "data:image/png;base64,fixture", token, id: "one" });
+  await f.ask({ type: "capture", mode: "ocr", images: ["data:image/png;base64,fixture"], token, id: "one" });
   f.chrome.runtime.lastError = { message: "Specified native messaging host not found." };
   f.ports[0].onDisconnect.listeners[0]();
   assert.match(f.sent.at(-1).message.error, /install.mjs/);
@@ -126,6 +126,19 @@ test("native archive metadata comes from the capture, rather than overlay input"
   assert.equal(posted.source.captureId, saved.token);
   assert.equal(posted.source.capturedAt, saved.capturedAt);
   await f.ask({ type: "cancel", token: saved.token });
+});
+
+test("captures forward bounded boxes, the first part number and part metadata", async () => {
+  const f = fixture(); await f.click(); const token = f.store["capture-1"].token;
+  const png = "data:image/png;base64,fixture";
+  for (const bad of [{ images: [] }, { images: Array(13).fill(png) }, { images: ["data:text/html,x"] }, { image: png },
+    { images: [png], firstPart: 0 }, { images: [png], firstPart: 1.5 }, { images: [png], parts: "x" }])
+    assert.equal((await f.ask({ type: "capture", mode: "ocr", token, id: "bad", ...bad })).ok, false, JSON.stringify(bad).slice(0, 60));
+  const parts = [{ part: 1, capturedAt: "2026-10-04T01:00:00Z" }, { part: 2, capturedAt: "2026-10-04T01:05:00Z" }];
+  assert.equal((await f.ask({ type: "capture", mode: "ocr", images: [png, png], firstPart: 2, parts, token, id: "ok" })).ok, true);
+  const posted = f.ports[0].posted[0];
+  assert.deepEqual([posted.images.length, posted.firstPart, posted.parts, posted.image], [2, 2, parts, undefined]);
+  await f.ask({ type: "cancel", token });
 });
 
 test("questions are bounded and forwarded with their history, never their overlay-supplied source", async () => {

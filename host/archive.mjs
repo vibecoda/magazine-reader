@@ -15,6 +15,16 @@ function sourceMetadata(source) {
   } catch { return null; }
 }
 
+/** Which part of the article came from which capture, as the overlay recorded it. */
+function partsMetadata(parts) {
+  if (!Array.isArray(parts) || !parts.length) return null;
+  return parts.slice(0, 99).map(entry => ({
+    part: Number.isInteger(entry?.part) && entry.part > 0 && entry.part < 100 ? entry.part : null,
+    capturedAt: typeof entry?.capturedAt === "string" && Number.isFinite(Date.parse(entry.capturedAt))
+      ? new Date(entry.capturedAt).toISOString() : null,
+  }));
+}
+
 /** Each request gets its own folder, including edited-text summary retries. */
 export function createArchive(message, { root = ARCHIVE_DIR, now = new Date() } = {}) {
   const timestamp = now.toISOString();
@@ -22,10 +32,11 @@ export function createArchive(message, { root = ARCHIVE_DIR, now = new Date() } 
   mkdirSync(day, { recursive: true, mode: 0o700 });
   const directory = mkdtempSync(join(day, `${timestamp.slice(11, 23).replace(/:/g, "-")}-`));
   const textPath = join(directory, "ocr.txt"), summaryPath = join(directory, "summary.md");
-  const metadataPath = join(directory, "metadata.json");
+  const metadataPath = join(directory, "metadata.json"), parts = partsMetadata(message.parts);
   const metadata = { version: 1, requestId: message.id, savedAt: timestamp,
     requestType: message.type, mode: message.mode || "summary",
     style: message.mode === "ocr" ? null : message.style || null, source: sourceMetadata(message.source),
+    ...(parts ? { parts } : {}),
     textFile: "ocr.txt", summaryFile: null };
   const writeMetadata = () => {
     const temporary = join(directory, `.metadata-${randomUUID()}.tmp`);
