@@ -270,6 +270,9 @@ ocr/      Swift source of the OCR helper (built to bin/ocr)
 tests/    node:test suites and a browser UI fixture
 ```
 
+[How Magazine Reader works](docs/architecture.md) follows one capture from the
+toolbar click through OCR, the archive, and DeepSeek, and explains the Library.
+
 ```bash
 node --test tests/*.test.mjs
 node --check chrome/content.js && node --check chrome/background.js
