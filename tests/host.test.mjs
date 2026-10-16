@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { endianness, tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { ask, askMessages, cleanText, cleanThread, deepseekKey, deepseekKeySource, ENDPOINT, joinParts, MODEL, STYLES, summarize, systemPrompt } from "../host/deepseek.mjs";
+import { ask, askMessages, cleanCommand, cleanText, cleanThread, commandPrompt, COMMAND_TOKENS, deepseekKey, deepseekKeySource, ENDPOINT, joinParts, MAX_COMMAND_NAME, MAX_COMMAND_PROMPT, MODEL, STYLES, summarize, systemPrompt } from "../host/deepseek.mjs";
 import { handle } from "../host/host.mjs";
 import { decodeImage, recognize } from "../host/ocr.mjs";
 import { extensionId, HOST_NAME, ROOT } from "../host/paths.mjs";
@@ -74,6 +74,65 @@ test("each summary style shapes the prompt and output budget, and unknown styles
   assert.notEqual(seen.prose.messages[0].content, seen.detailed.messages[0].content);
   await assert.rejects(summarize("日本語", { style: "constructor", key: "test" }), /Unknown summary style/);
   await assert.rejects(handle({ id: "x", type: "summarize", text: "日本語", style: "poem" }, { archive: () => assert.fail("archived") }), /Unknown summary style/);
+});
+
+test("a custom command supplies its prompt and output budget, and its result carries no style", async () => {
+  const command = { id: "timeline", name: "  Timeline  ", prompt: "  List the events in date order.  ", tokens: 2000 };
+  let body;
+  const result = await summarize("日本語", { command, key: "test", fetchImpl: async (_url, options) => {
+    body = JSON.parse(options.body);
+    return { ok: true, status: 200, json: async () => ({ choices: [{ finish_reason: "stop", message: { content: "Out" } }] }) };
+  } });
+  assert.match(body.messages[0].content, /^List the events in date order\./);
+  assert.match(body.messages[0].content, /untrusted source material/);
+  assert.match(body.messages[0].content, /one continuous article/);
+  assert.match(body.messages[0].content, /Limitations:/);
+  assert.equal(body.max_tokens, 2000);
+  assert.equal(body.messages[1].content, "日本語");
+  assert.equal(result.style, null);
+  assert.deepEqual(cleanCommand(command), { id: "timeline", name: "Timeline", prompt: "List the events in date order.", tokens: 2000 });
+  assert.equal(commandPrompt(cleanCommand(command)), body.messages[0].content);
+  assert.deepEqual(COMMAND_TOKENS, [900, 2000, 4000]);
+  assert.equal(MAX_COMMAND_NAME, 40); assert.equal(MAX_COMMAND_PROMPT, 4000);
+});
+
+test("invalid custom commands are rejected before DeepSeek or the archive runs", async () => {
+  const valid = { id: "timeline", name: "Timeline", prompt: "List events.", tokens: 900 };
+  assert.throws(() => cleanCommand(null), /Invalid custom command/);
+  assert.throws(() => cleanCommand({ ...valid, id: "bad id" }), /Invalid custom command/);
+  assert.throws(() => cleanCommand({ ...valid, name: " " }), /Command names/);
+  assert.throws(() => cleanCommand({ ...valid, name: "x".repeat(41) }), /Command names/);
+  assert.throws(() => cleanCommand({ ...valid, prompt: "  " }), /Command prompts/);
+  assert.throws(() => cleanCommand({ ...valid, prompt: "x".repeat(4001) }), /Command prompts/);
+  assert.throws(() => cleanCommand({ ...valid, tokens: 1500 }), /output length/);
+  await assert.rejects(summarize("日本語", { command: { ...valid, tokens: 1200 }, key: "test" }), /output length/);
+  await assert.rejects(handle({ id: "x", type: "summarize", text: "本文", command: { ...valid, id: "bad/id" } },
+    { archive: () => assert.fail("archived") }), /Invalid custom command/);
+});
+
+test("a custom command request reaches DeepSeek and is archived by name with a null style", async () => {
+  const command = { id: "timeline", name: "Timeline", prompt: "List the events.", tokens: 4000 };
+  let archived, llmOptions;
+  const result = await handle({ id: "one", type: "summarize", text: "本文", command }, {
+    archive: message => { archived = message; return { info: { directory: "fixture" }, complete: () => {} }; },
+    llm: async (_text, options) => { llmOptions = options; return { summary: "Timeline\n\nEvents.", model: "test-model", truncated: false }; },
+  });
+  assert.equal(llmOptions.style, null);
+  assert.deepEqual(llmOptions.command, command);
+  assert.equal(archived.style, null);
+  assert.deepEqual(archived.command, { id: "timeline", name: "Timeline" });
+  assert.equal(result.archive.directory, "fixture");
+  assert.equal(result.summary, "Timeline\n\nEvents.");
+});
+
+test("a custom command with an unknown style key still bypasses the built-in style list", async () => {
+  let seen;
+  await handle({ id: "one", type: "capture", mode: "summary", image: PNG,
+    command: { id: "timeline", name: "Timeline", prompt: "List events.", tokens: 900 } }, {
+    ocr: async () => "本文", archive: () => ({ info: {}, complete: () => {} }),
+    llm: async (_text, options) => { seen = options; return { summary: "T", model: "m", truncated: false }; },
+  });
+  assert.equal(seen.style, null); assert.equal(seen.command.name, "Timeline");
 });
 
 test("questions send the excerpt once, then earlier turns in order, and validate their inputs", async () => {

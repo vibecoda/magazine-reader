@@ -47,6 +47,11 @@ export function titleOf(summary, style) {
 }
 
 const summaryOf = entry => entry.metadata.summaryFile === "summary.md" ? readText(join(entry.directory, "summary.md")) : null;
+const commandOf = entry => {
+  const command = entry.metadata.command;
+  return command && typeof command.id === "string" && typeof command.name === "string"
+    ? { id: command.id, name: command.name } : null;
+};
 const capturedAt = entry => entry.metadata.source?.capturedAt || entry.metadata.savedAt || "";
 const groupKey = entry => entry.metadata.source?.captureId || `entry:${entry.id}`;
 
@@ -72,7 +77,7 @@ export function listCaptures({ query = "", root = ARCHIVE_DIR } = {}) {
       key, url: group[0].metadata.source?.url || null, capturedAt: capturedAt(group[0]),
       title, snippet: latest.text.replace(/\s+/g, " ").trim().slice(0, 120),
       entries: texts.map(({ entry, summary }) => ({ id: entry.id, style: entry.metadata.style || null,
-        savedAt: entry.metadata.savedAt || null, hasSummary: Boolean(summary), truncated: Boolean(entry.metadata.truncated) })),
+        command: commandOf(entry), savedAt: entry.metadata.savedAt || null, hasSummary: Boolean(summary), truncated: Boolean(entry.metadata.truncated) })),
     });
   }
   captures.sort((a, b) => b.capturedAt.localeCompare(a.capturedAt));
@@ -97,7 +102,7 @@ export function readCapture(ids, { root = ARCHIVE_DIR } = {}) {
     size += cost;
     if (textIndex < 0) textIndex = texts.push(text) - 1;
     const { metadata } = entry;
-    out.push({ id: entry.id, directory: entry.directory, style: metadata.style || null, mode: metadata.mode || null,
+    out.push({ id: entry.id, directory: entry.directory, style: metadata.style || null, command: commandOf(entry), mode: metadata.mode || null,
       savedAt: metadata.savedAt || null, model: metadata.model || null, truncated: Boolean(metadata.truncated),
       source: metadata.source || null, textIndex, summary });
   }

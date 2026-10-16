@@ -25,6 +25,12 @@ function partsMetadata(parts) {
   }));
 }
 
+/** The reader command that produced a summary, or null for the built-in styles. */
+function commandMetadata(command) {
+  if (!command || typeof command.id !== "string" || typeof command.name !== "string") return null;
+  return { id: command.id.slice(0, 64), name: command.name.slice(0, 40) };
+}
+
 /** Each request gets its own folder, including edited-text summary retries. */
 export function createArchive(message, { root = ARCHIVE_DIR, now = new Date() } = {}) {
   const timestamp = now.toISOString();
@@ -32,10 +38,11 @@ export function createArchive(message, { root = ARCHIVE_DIR, now = new Date() } 
   mkdirSync(day, { recursive: true, mode: 0o700 });
   const directory = mkdtempSync(join(day, `${timestamp.slice(11, 23).replace(/:/g, "-")}-`));
   const textPath = join(directory, "ocr.txt"), summaryPath = join(directory, "summary.md");
-  const metadataPath = join(directory, "metadata.json"), parts = partsMetadata(message.parts);
+  const metadataPath = join(directory, "metadata.json"), parts = partsMetadata(message.parts), command = commandMetadata(message.command);
   const metadata = { version: 1, requestId: message.id, savedAt: timestamp,
     requestType: message.type, mode: message.mode || "summary",
     style: message.mode === "ocr" ? null : message.style || null, source: sourceMetadata(message.source),
+    ...(command ? { command } : {}),
     ...(parts ? { parts } : {}),
     textFile: "ocr.txt", summaryFile: null };
   const writeMetadata = () => {

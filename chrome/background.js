@@ -105,7 +105,13 @@ async function request(message, sender) {
   if (message.type !== "capture" && (typeof message.text !== "string" || !message.text.trim() || message.text.length > 60_000))
     throw new Error("Supply between 1 and 60,000 characters of OCR text.");
   // The native host checks the exact style list; this only bounds what is forwarded.
-  if (message.style !== undefined && (typeof message.style !== "string" || !/^[a-z]{1,20}$/.test(message.style)))
+  if (message.command !== undefined) {
+    const { id: commandId, name, prompt, tokens } = message.command ?? {};
+    if (typeof commandId !== "string" || !/^[a-zA-Z0-9-]{1,64}$/.test(commandId)
+      || typeof name !== "string" || !name.trim() || name.trim().length > 40
+      || typeof prompt !== "string" || !prompt.trim() || prompt.trim().length > 4000
+      || ![900, 2000, 4000].includes(tokens)) throw new Error("Invalid custom command.");
+  } else if (message.style !== undefined && (typeof message.style !== "string" || !/^[a-z]{1,20}$/.test(message.style)))
     throw new Error("Unknown summary style.");
   const id = message.id;
   const port = chrome.runtime.connectNative(HOST);
@@ -131,7 +137,7 @@ async function request(message, sender) {
     finish();
   }, 130_000 + 15_000 * Math.max(0, images.length - 1));
   try {
-    port.postMessage({ id, type: message.type, style: message.style,
+    port.postMessage({ id, type: message.type, style: message.style, ...(message.command ? { command: message.command } : {}),
       source: { url: capture.url, capturedAt: capture.capturedAt, captureId: capture.token }, parts: message.parts,
       ...(message.type === "capture"
       ? { images, mode: message.mode, firstPart: message.firstPart }

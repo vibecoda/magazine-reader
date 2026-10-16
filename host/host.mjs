@@ -1,6 +1,6 @@
 /** stdout is exclusively Chrome's framed JSON channel; no document or key logging. */
 import { fileURLToPath } from "node:url";
-import { ask, cleanText, cleanThread, DEFAULT_STYLE, joinParts, MAX_PARTS, STYLES, summarize } from "./deepseek.mjs";
+import { ask, cleanCommand, cleanText, cleanThread, DEFAULT_STYLE, joinParts, MAX_PARTS, STYLES, summarize } from "./deepseek.mjs";
 import { createArchive } from "./archive.mjs";
 import { kotoba } from "./kotoba.mjs";
 import { library } from "./library.mjs";
@@ -25,8 +25,9 @@ export async function handle(message, { emit = () => {}, ocr = recognize, llm = 
   if (message.type === "library") return books(message);
   if (!["summarize", "ask"].includes(message.type) && (message.type !== "capture" || !["ocr", "summary"].includes(message.mode))) throw new Error("Unknown request.");
   const thread = message.type === "ask" ? cleanThread(message) : null;
-  const style = thread ? "ask" : message.style ?? DEFAULT_STYLE;
-  if (!thread && !Object.hasOwn(STYLES, style)) throw new Error("Unknown summary style.");
+  const command = !thread && message.command !== undefined ? cleanCommand(message.command) : null;
+  const style = thread ? "ask" : command ? null : message.style ?? DEFAULT_STYLE;
+  if (!thread && !command && !Object.hasOwn(STYLES, style)) throw new Error("Unknown summary style.");
   let text = message.text;
   if (message.type === "capture") {
     const { images, firstPart } = captureImages(message), texts = [];
@@ -43,7 +44,8 @@ export async function handle(message, { emit = () => {}, ocr = recognize, llm = 
   }
   text = cleanText(text);
   let saved;
-  try { saved = archive({ id: message.id, type: message.type, mode: message.mode, source: message.source, parts: message.parts, style, text }); }
+  try { saved = archive({ id: message.id, type: message.type, mode: message.mode, source: message.source, parts: message.parts, style,
+    command: command ? { id: command.id, name: command.name } : null, text }); }
   catch { throw new Error("Could not save OCR locally. Check the magazine-reader data/ folder permissions and disk space."); }
   emit({ id: message.id, stage: "archived", archive: saved.info, text });
   if (message.type === "capture" && message.mode === "ocr") return { text, archive: saved.info };
@@ -55,7 +57,7 @@ export async function handle(message, { emit = () => {}, ocr = recognize, llm = 
     return { ...result, archive: saved.info };
   }
   emit({ id: message.id, stage: "summarizing" });
-  const result = await llm(text, { style, signal });
+  const result = await llm(text, { style, command, signal });
   try { saved.complete(result); }
   catch { throw new Error("The summary could not be saved locally. OCR is saved; check disk space and try again."); }
   return { text, ...result, archive: saved.info };

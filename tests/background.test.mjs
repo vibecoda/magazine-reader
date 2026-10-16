@@ -170,6 +170,19 @@ test("questions are bounded and forwarded with their history, never their overla
   await f.ask({ type: "cancel", token });
 });
 
+test("a custom command is forwarded as command with no style, and malformed commands are rejected", async () => {
+  const f = fixture(); await f.click(); const token = f.store["capture-1"].token;
+  const command = { id: "timeline", name: "Timeline", prompt: "List the events.", tokens: 900 };
+  for (const bad of [null, {}, { ...command, id: "bad id" }, { ...command, name: " " }, { ...command, name: "x".repeat(41) },
+    { ...command, prompt: "" }, { ...command, prompt: "x".repeat(4001) }, { ...command, tokens: 1500 }])
+    assert.equal((await f.ask({ type: "summarize", text: "本文", command: bad, token, id: "bad" })).ok, false, JSON.stringify(bad).slice(0, 60));
+  assert.equal((await f.ask({ type: "summarize", text: "本文", command, token, id: "ok" })).ok, true);
+  const posted = f.ports[0].posted[0];
+  assert.deepEqual(posted.command, command);
+  assert.equal(posted.style, undefined);
+  await f.ask({ type: "cancel", token });
+});
+
 test("Kotoba requests go to their own native host process and still need the current capture", async () => {
   const f = fixture(); await f.click(); const token = f.store["capture-1"].token;
   await f.ask({ type: "summarize", text: "本文", token, id: "running" });

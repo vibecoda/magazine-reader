@@ -69,6 +69,17 @@ test("titles come from a summary's first line or the question; word lists have n
   assert.equal(titleOf(null, "overview"), null);
 });
 
+test("custom command outputs carry their name so the Library can group by it", t => {
+  const f = fixture(t), source = { url, captureId: "one", capturedAt: "2026-10-04T01:00:00Z" };
+  f.save({ id: "a", style: null, command: { id: "timeline", name: "Timeline" }, source, text: "原文" }, "Timeline\n\nEvents in order.", "2026-10-04T01:01:00Z");
+  f.save({ id: "b", style: "overview", source, text: "原文" }, "Overview\n\nPlain body.", "2026-10-04T01:02:00Z");
+  const [capture] = listCaptures({ root: f.root }).captures;
+  assert.deepEqual(capture.entries.map(e => [e.style, e.command]), [[null, { id: "timeline", name: "Timeline" }], ["overview", null]]);
+  const { entries } = readCapture(capture.entries.map(e => e.id), { root: f.root });
+  assert.deepEqual(entries.map(e => [e.style, e.command]), [[null, { id: "timeline", name: "Timeline" }], ["overview", null]]);
+  assert.deepEqual([...new Set(entries.map(e => e.command?.name || e.style))], ["Timeline", "overview"]);
+});
+
 test("the native host routes library requests without archiving or calling DeepSeek", async () => {
   let seen;
   const result = await handle({ id: "lib", type: "library", action: "list" }, {
