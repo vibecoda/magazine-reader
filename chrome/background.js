@@ -7,7 +7,7 @@ const supported = url => {
   try { const u = new URL(url); return u.origin === "https://magazine.rakuten.co.jp" && u.pathname.startsWith("/read/"); }
   catch { return false; }
 };
-const send = (tabId, message) => chrome.tabs.sendMessage(tabId, { channel: CHANNEL, ...message }, { frameId: 0 });
+const send = (tabId, message, documentId) => chrome.tabs.sendMessage(tabId, { channel: CHANNEL, ...message }, documentId ? { documentId } : { frameId: 0 });
 
 function cancel(tabId) {
   const job = jobs.get(tabId);
@@ -78,9 +78,11 @@ async function request(message, sender) {
     await captureReader(tab, sender.documentId);
     return { ok: true };
   }
+  // The capture belongs to one reader document: the reader may change its URL while turning pages, but a
+  // reload or navigation makes a new document. Only screenshots expire; text requests last as long as the page.
   const capture = (await chrome.storage.session.get(sessionKey(tabId)))[sessionKey(tabId)];
   if (!capture || capture.token !== message.token || capture.documentId !== sender.documentId
-    || capture.url !== sender.url || capture.expires < Date.now())
+    || (message.type === "capture" && capture.expires < Date.now()))
     throw new Error("This capture expired. Click the extension to capture again.");
   if (message.type === "cancel") { cancel(tabId); return { ok: true }; }
   if (message.type === "kotoba") return kotoba(message);
@@ -109,7 +111,7 @@ async function request(message, sender) {
   const port = chrome.runtime.connectNative(HOST);
   const job = { id, port, timer: null };
   jobs.set(tabId, job);
-  const deliver = event => send(tabId, { type: "progress", token: capture.token, ...event }).catch(() => cancel(tabId));
+  const deliver = event => send(tabId, { type: "progress", token: capture.token, ...event }, capture.documentId).catch(() => cancel(tabId));
   const finish = () => { if (jobs.get(tabId) === job) jobs.delete(tabId); clearTimeout(job.timer); port.disconnect(); };
   port.onMessage.addListener(event => {
     if (jobs.get(tabId) !== job || event?.id !== id) return;
@@ -146,6 +148,5 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
 });
 
 chrome.tabs.onRemoved.addListener(tabId => { cancel(tabId); void chrome.storage.session.remove(sessionKey(tabId)); });
-chrome.tabs.onUpdated.addListener((tabId, change) => {
-  if (change.status === "loading" || change.url) { cancel(tabId); void chrome.storage.session.remove(sessionKey(tabId)); }
-});
+// A navigation away needs no listener here: the old overlay is gone, so delivering its next progress
+// event fails and cancels the job, and requests from the new document fail the documentId check.

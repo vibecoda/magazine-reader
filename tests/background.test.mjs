@@ -22,7 +22,7 @@ function fixture({ store = {}, active = { id: 1, windowId: 2, url: URL_READER } 
       get: async id => ({ ...active, id }),
       query: async () => [active],
       captureVisibleTab: async id => { captures.push(id); return "data:image/png;base64,fixture"; },
-      sendMessage: async (tabId, message) => { sent.push({ tabId, message }); return { ok: true }; },
+      sendMessage: async (tabId, message, options) => { sent.push({ tabId, message, options }); return { ok: true }; },
       onRemoved: event(), onUpdated: event(),
     },
     runtime: { id: "this-extension", onMessage: event(), nativeMessages: [],
@@ -68,7 +68,7 @@ test("a capture survives service worker restart but rejects another document or 
   assert.equal(restarted.ports[0].disconnected, true);
 });
 
-test("only the current request may deliver progress; navigation disconnects the native host", async () => {
+test("only the current request may deliver progress, to its own document; navigation disconnects the native host", async () => {
   const f = fixture(); await f.click();
   const token = f.store["capture-1"].token;
   await f.ask({ type: "summarize", text: "本文", token, id: "new-job" });
@@ -77,8 +77,24 @@ test("only the current request may deliver progress; navigation disconnects the 
   assert.equal(f.sent.length, before);
   port.onMessage.listeners[0]({ id: "new-job", stage: "summarizing" });
   assert.equal(f.sent.at(-1).message.token, token);
-  f.chrome.tabs.onUpdated.listeners[0](1, { status: "loading" });
-  assert.equal(port.disconnected, true); assert.equal(f.store["capture-1"], undefined);
+  assert.equal(f.sent.at(-1).options.documentId, "document-one");
+  // After navigating away, the captured document no longer receives messages.
+  f.chrome.tabs.sendMessage = async () => { throw new Error("Could not establish connection."); };
+  port.onMessage.listeners[0]({ id: "new-job", stage: "summarizing" });
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(port.disconnected, true);
+});
+
+test("text requests survive reader URL changes and long reading; only screenshots expire", async () => {
+  const f = fixture(); await f.click();
+  const token = f.store["capture-1"].token;
+  f.store["capture-1"].expires = 0;
+  f.sender.url = `${URL_READER}?page=12#spread`;
+  assert.equal((await f.ask({ type: "summarize", text: "本文", token, id: "late" })).ok, true);
+  await f.ask({ type: "cancel", token });
+  assert.equal((await f.ask({ type: "ask", text: "本文", question: "q", token, id: "later" })).ok, true);
+  await f.ask({ type: "cancel", token });
+  assert.match((await f.ask({ type: "capture", mode: "ocr", images: ["data:image/png;base64,fixture"], token, id: "stale" })).error, /expired/);
 });
 
 test("missing host errors are actionable and don't leave a live request", async () => {
