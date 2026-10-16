@@ -174,7 +174,7 @@ test("a custom command is forwarded as command with no style, and malformed comm
   const f = fixture(); await f.click(); const token = f.store["capture-1"].token;
   const command = { id: "timeline", name: "Timeline", prompt: "List the events.", tokens: 900 };
   for (const bad of [null, {}, { ...command, id: "bad id" }, { ...command, name: " " }, { ...command, name: "x".repeat(41) },
-    { ...command, prompt: "" }, { ...command, prompt: "x".repeat(4001) }, { ...command, tokens: 1500 }])
+    { ...command, prompt: "" }, { ...command, prompt: "x".repeat(20001) }, { ...command, tokens: 1500 }])
     assert.equal((await f.ask({ type: "summarize", text: "本文", command: bad, token, id: "bad" })).ok, false, JSON.stringify(bad).slice(0, 60));
   assert.equal((await f.ask({ type: "summarize", text: "本文", command, token, id: "ok" })).ok, true);
   const posted = f.ports[0].posted[0];

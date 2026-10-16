@@ -93,7 +93,7 @@ test("a custom command supplies its prompt and output budget, and its result car
   assert.deepEqual(cleanCommand(command), { id: "timeline", name: "Timeline", prompt: "List the events in date order.", tokens: 2000 });
   assert.equal(commandPrompt(cleanCommand(command)), body.messages[0].content);
   assert.deepEqual(COMMAND_TOKENS, [900, 2000, 4000]);
-  assert.equal(MAX_COMMAND_NAME, 40); assert.equal(MAX_COMMAND_PROMPT, 4000);
+  assert.equal(MAX_COMMAND_NAME, 40); assert.equal(MAX_COMMAND_PROMPT, 20000);
 });
 
 test("invalid custom commands are rejected before DeepSeek or the archive runs", async () => {
@@ -103,7 +103,7 @@ test("invalid custom commands are rejected before DeepSeek or the archive runs",
   assert.throws(() => cleanCommand({ ...valid, name: " " }), /Command names/);
   assert.throws(() => cleanCommand({ ...valid, name: "x".repeat(41) }), /Command names/);
   assert.throws(() => cleanCommand({ ...valid, prompt: "  " }), /Command prompts/);
-  assert.throws(() => cleanCommand({ ...valid, prompt: "x".repeat(4001) }), /Command prompts/);
+  assert.throws(() => cleanCommand({ ...valid, prompt: "x".repeat(20001) }), /Command prompts/);
   assert.throws(() => cleanCommand({ ...valid, tokens: 1500 }), /output length/);
   await assert.rejects(summarize("日本語", { command: { ...valid, tokens: 1200 }, key: "test" }), /output length/);
   await assert.rejects(handle({ id: "x", type: "summarize", text: "本文", command: { ...valid, id: "bad/id" } },

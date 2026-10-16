@@ -128,7 +128,8 @@ The host looks for a key in this order and uses the first it finds:
 way the built-in styles are. Open the reader's **Aa** reading settings and click
 **Commands…** (or use **Commands…** on the capture bar, or **Manage commands…** in the
 reader's command menu), then **Add command**: give it a name, the instruction DeepSeek
-should follow, and an output length (short, standard, or long). A command joins the
+should follow (up to 20,000 characters), and an output length (short, standard, or
+long). A command joins the
 capture bar's **Summary style** menu and the **Custom command…** menu beside
 **Summarize**. Running one shows its output under the command's name, and **Run** sends
 the same text again. Commands live in Chrome's extension storage, and each saved result

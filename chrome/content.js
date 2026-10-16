@@ -32,7 +32,7 @@
   const THEMES = { paper: "Paper", sepia: "Sepia", night: "Night" };
   const LAYOUTS = { center: "Centered", left: "Dock left", right: "Dock right" };
   const SIZE = { min: 13, max: 28 };
-  const MAX_COMMANDS = 40, MAX_COMMAND_NAME = 40, MAX_COMMAND_PROMPT = 4000, COMMAND_ID = /^[a-zA-Z0-9-]{1,64}$/;
+  const MAX_COMMANDS = 40, MAX_COMMAND_NAME = 40, MAX_COMMAND_PROMPT = 20000, COMMAND_ID = /^[a-zA-Z0-9-]{1,64}$/;
   const COMMAND_LENGTHS = { 900: "Short", 2000: "Standard", 4000: "Long" };
   const DEFAULTS = { style: "overview", font: "serif", size: 18, spacing: "normal", width: "medium",
     theme: "paper", layout: "center", align: "left", toolbarSide: "right", command: "" };

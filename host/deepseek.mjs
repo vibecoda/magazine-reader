@@ -41,7 +41,7 @@ export const DEFAULT_STYLE = "overview";
 export const partMarker = number => `――― Part ${number} ―――`;
 export const MAX_PARTS = 99;
 export const COMMAND_TOKENS = [900, 2000, 4000];
-export const MAX_COMMAND_NAME = 40, MAX_COMMAND_PROMPT = 4000;
+export const MAX_COMMAND_NAME = 40, MAX_COMMAND_PROMPT = 20000;
 const PARTS_NOTE = `Lines like "${partMarker(2)}" mark parts of one article captured separately (other pages, columns,
 or boxes), in reading order. Read them as one continuous article unless a part is clearly a separate sidebar.`;
 

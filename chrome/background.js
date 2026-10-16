@@ -109,7 +109,7 @@ async function request(message, sender) {
     const { id: commandId, name, prompt, tokens } = message.command ?? {};
     if (typeof commandId !== "string" || !/^[a-zA-Z0-9-]{1,64}$/.test(commandId)
       || typeof name !== "string" || !name.trim() || name.trim().length > 40
-      || typeof prompt !== "string" || !prompt.trim() || prompt.trim().length > 4000
+      || typeof prompt !== "string" || !prompt.trim() || prompt.trim().length > 20000
       || ![900, 2000, 4000].includes(tokens)) throw new Error("Invalid custom command.");
   } else if (message.style !== undefined && (typeof message.style !== "string" || !/^[a-z]{1,20}$/.test(message.style)))
     throw new Error("Unknown summary style.");
