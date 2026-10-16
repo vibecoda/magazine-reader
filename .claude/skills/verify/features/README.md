@@ -33,6 +33,7 @@ Each feature file starts with an H1 and one paragraph, then four H2s in this ord
 - [Capture overlay](./capture-overlay.md) covers drawing boxes, Whole viewport, Undo, and OCR only / Summarize selection, in the fixture.
 - [Articles in parts](./articles-in-parts.md) covers + Add part, Capture page and Add to article, in the fixture.
 - [Reader and Ask](./reader-and-ask.md) covers style tabs, reading settings, keyboard shortcuts and the Ask conversation, in the fixture.
+- [Custom commands](./custom-commands.md) covers registering, editing, deleting and running reader commands, in the fixture, and their Library tab.
 - [Native host OCR and archive](./native-host-ocr.md) covers real Live Text OCR, multi-box parts and archive files, through the host.
 
 Not yet mapped: the Vocabulary tab with Kotoba badges and cards (the fixture mocks Kotoba as 負担/両立/試験), the Stocks tab and its Monex links, and Copy. The real toolbar capture on Rakuten can't be driven at all.
