@@ -16,6 +16,7 @@ const recognized = ({ images, firstPart = 1 }) => images.length === 1 && firstPa
   : images.map((_, index) => `――― Part ${firstPart + index} ―――\n${firstPart + index === 1 ? text : continuation[(firstPart + index) % 2]}`).join("\n\n");
 const deliver = message => new Promise(resolve => listeners[0]({ channel: "magazine-reader", ...message }, {}, resolve));
 summaries.stocks = "Companies in a four-day week debate\n\nThe excerpt names two listed firms trialling shorter weeks and one unlisted consultancy.\n\nStocks\n- 7203 | トヨタ自動車 | Toyota Motor | stated | Cited as considering a four-day pilot\n- 160A | アズーム | Azoom | inferred | Mentioned as an early adopter\n\nOther companies\n- ---- | 働き方研究所 | Work Style Institute | stated | Ran the employee survey";
+const commandSummary = command => `Command: ${command.name}\n\nThe fixture ran “${command.name}” against the captured article.\n\n• This canned result proves the custom command reached the host and came back.\n• A real run returns DeepSeek output instead.`;
 const storage = { local: {
   get: async key => { try { return { [key]: JSON.parse(localStorage.getItem(`fixture-${key}`)) }; } catch { return {}; } },
   set: async values => { for (const [key, value] of Object.entries(values)) localStorage.setItem(`fixture-${key}`, JSON.stringify(value)); },
@@ -38,7 +39,9 @@ window.chrome = { storage, runtime: {
           summaryPath: message.mode === "ocr" ? null : "/synthetic-preview/archive/summary.md" },
         text: message.type === "capture" ? recognized(message) : message.text,
         ...(message.type === "ask" ? { answer: `You asked: "${message.question}" (${message.history.length} earlier turns).\n\nThe article describes a **three-month** trial with **200 employees**. It reports:\n- less commuting and better work–life balance\n- more pressure to finish the same work in less time\n\nIt does not give productivity figures, so the overall effect on output is not stated in the article.`, model: "deepseek-flash (UI fixture)" }
-          : message.mode === "ocr" ? {} : { summary: summaries[message.style || "overview"], style: message.style, model: "deepseek-flash (UI fixture)" }) });
+          : message.mode === "ocr" ? {}
+          : message.command ? { summary: commandSummary(message.command), command: { id: message.command.id, name: message.command.name }, model: "deepseek-flash (UI fixture)" }
+          : { summary: summaries[message.style || "overview"], style: message.style, model: "deepseek-flash (UI fixture)" }) });
     }, Number(new URLSearchParams(location.search).get("delay")) || 250);
     return { ok: true, id: message.id };
   },

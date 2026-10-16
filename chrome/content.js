@@ -32,19 +32,37 @@
   const THEMES = { paper: "Paper", sepia: "Sepia", night: "Night" };
   const LAYOUTS = { center: "Centered", left: "Dock left", right: "Dock right" };
   const SIZE = { min: 13, max: 28 };
+  const MAX_COMMANDS = 40, MAX_COMMAND_NAME = 40, MAX_COMMAND_PROMPT = 4000, COMMAND_ID = /^[a-zA-Z0-9-]{1,64}$/;
+  const COMMAND_LENGTHS = { 900: "Short", 2000: "Standard", 4000: "Long" };
   const DEFAULTS = { style: "overview", font: "serif", size: 18, spacing: "normal", width: "medium",
-    theme: "paper", layout: "center", align: "left", toolbarSide: "right" };
+    theme: "paper", layout: "center", align: "left", toolbarSide: "right", command: "" };
   const choices = { style: STYLES, font: FONTS, spacing: SPACING, width: WIDTHS, theme: THEMES, layout: LAYOUTS,
     align: { left: "", justify: "" }, toolbarSide: { left: "", right: "" } };
+  const cleanCommand = value => {
+    const id = typeof value?.id === "string" && COMMAND_ID.test(value.id) ? value.id : "";
+    const name = typeof value?.name === "string" ? value.name.trim() : "";
+    const prompt = typeof value?.prompt === "string" ? value.prompt.trim() : "";
+    if (!id || !name || name.length > MAX_COMMAND_NAME || !prompt || prompt.length > MAX_COMMAND_PROMPT) return null;
+    return { id, name, prompt, tokens: Object.hasOwn(COMMAND_LENGTHS, Number(value.tokens)) ? Number(value.tokens) : 2000 };
+  };
   const sanitize = saved => {
     const clean = { ...DEFAULTS };
     for (const [key, options] of Object.entries(choices)) if (Object.hasOwn(options, saved?.[key])) clean[key] = saved[key];
     if (Number.isInteger(saved?.size)) clean.size = Math.min(SIZE.max, Math.max(SIZE.min, saved.size));
+    if (typeof saved?.command === "string" && COMMAND_ID.test(saved.command)) clean.command = saved.command;
     return clean;
   };
   let settings = { ...DEFAULTS };
+  const commands = [];
   const settingsReady = (async () => {
     try { settings = sanitize((await chrome.storage?.local?.get("readerSettings"))?.readerSettings); } catch { /* defaults */ }
+    try {
+      const saved = (await chrome.storage?.local?.get("readerCommands"))?.readerCommands;
+      if (Array.isArray(saved)) for (const value of saved.slice(0, MAX_COMMANDS)) {
+        const command = cleanCommand(value);
+        if (command && !commands.some(item => item.id === command.id)) commands.push(command);
+      }
+    } catch { /* no saved commands */ }
   })();
 
   const host = document.createElement("div");
@@ -164,22 +182,40 @@
     .panel-bottom button{background:var(--btn);border-color:var(--btn-line);color:var(--btn-fg);font-size:12px;padding:8px 12px}.panel-bottom button:hover{background:var(--bg)}
     .panel-bottom button.primary{background:var(--primary);border-color:var(--primary);color:var(--primary-fg)}.panel-bottom button.primary:hover{filter:brightness(1.1)}
     .footnote{display:flex;justify-content:space-between;gap:10px;margin-top:8px;font-size:10px;line-height:1.5;color:var(--muted);flex-wrap:wrap}.archive-status{color:var(--accent);overflow-wrap:anywhere}
+    .panel-bottom .command-picker{max-width:170px;padding:7px 9px;border-radius:8px;border:1px solid var(--btn-line);background:var(--btn);color:var(--btn-fg);font-size:12px}
+    .commands{position:fixed;inset:0;pointer-events:auto;overflow:auto;background:#0a1016e0;padding:20px;display:flex;justify-content:center;align-items:flex-start;animation:fade .15s}
+    .commands-panel{width:min(680px,100%);background:#13202d;border:1px solid #415263;border-radius:14px;box-shadow:0 20px 80px #0008;overflow:hidden}
+    .commands-head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid #2c3a47;background:#182634}
+    .commands-body{padding:16px;display:grid;gap:12px}
+    .command-row{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:11px 12px;border:1px solid #3b4c5d;border-radius:10px;background:#223140}
+    .command-info{min-width:0}.command-row .name{font-weight:650}
+    .command-row .prompt{color:#b3c0cb;font-size:12px;line-height:1.5;margin-top:3px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:4.5em;overflow:hidden}
+    .command-row .actions{flex:none;margin:0;gap:6px}
+    .command-form{display:grid;gap:10px;border:1px solid #3b4c5d;border-radius:10px;background:#1b2a37;padding:14px}
+    .command-form label{display:flex;flex-direction:column;gap:5px;font-size:11px;font-weight:600;letter-spacing:.4px;color:#b3c0cb}
+    .command-form input,.command-form textarea,.command-form select{width:100%;margin:0;padding:8px 9px;border-radius:8px;border:1px solid #3b4c5d;background:#223140;color:#e8edf3}
+    .command-form textarea{height:130px;font-size:13px;line-height:1.6;resize:vertical}
+    .command-error{color:#f0a090;font-size:12px;line-height:1.5}
+    .command-empty{color:#b3c0cb;font-size:13px;line-height:1.6;margin:0}
+    .toolbar .manage-commands{width:100%;margin:6px 0 0;font-size:12px;padding:6px 9px}
     .panel button:focus-visible,.panel summary:focus-visible,.panel textarea:focus-visible,.panel input:focus-visible,.toolbar :focus-visible{outline:2px solid var(--accent,#8eae66);outline-offset:2px}
     @media(max-width:600px){.toolbar{padding:12px}button{padding:8px 10px}.reader{padding:6px}.panel-body{padding:18px}.settings{grid-template-columns:1fr}}
   `;
   root.append(style);
-  let ui = null, capture = null, image = null, regions = [], busy = false, jobId = null, jobStyle = null;
+  let ui = null, capture = null, image = null, regions = [], busy = false, jobId = null, jobStyle = null, jobCommand = null;
   let resetting = false, archiveInfo = null, settingsOpen = false;
-  let ocrText = "", crops = [], activeStyle = DEFAULTS.style;
+  let ocrText = "", crops = [], activeStyle = DEFAULTS.style, activeCommand = null, pendingCommand = null;
   // An article can be collected from several boxes and pages before it is summarized.
   let parts = []; // { part, capturedAt } for each part recognized so far
   let appending = false, jobBase = null, jobParts = null; // jobBase: the article text a running capture adds to
   const summaries = new Map(); // style → { text, source, truncated }
+  const commandResults = new Map(); // command id → { text, source, truncated, name }
   const thread = []; // { question, answer?, error?, truncated? }; at most one turn is pending
   const vocab = new Map(); // "term|reading" → the word's Kotoba state for this capture; see vocabEntry
   let askNode = null, threadNode = null, askInput = null, askButton = null, suggestionsNode = null, clearButton = null;
   let panel = null, panelStatus = null, summaryNode = null, skeleton = null, readingLabel = null, textArea = null, archiveNode = null, kotobaCount = null;
   let captureNode = null, addPartButton = null, summarizeButton = null, copyButton = null, cancelButton = null, settingsButton = null, settingsSheet = null, tabButtons = [];
+  let captureStylePicker = null, captureHint = null, readerCommandPicker = null, closeCommands = null;
   const syncers = [];
   const node = (tag, className, text) => {
     const e = document.createElement(tag); if (className) e.className = className;
@@ -189,7 +225,7 @@
     const b = node("button", className, text); b.type = "button"; b.addEventListener("click", handler); return b;
   };
   const isReader = () => ui?.classList.contains("reader");
-  const current = () => summaries.get(activeStyle);
+  const currentEntry = () => activeCommand ? commandResults.get(activeCommand) : summaries.get(activeStyle);
   const ask = payload => chrome.runtime.sendMessage({ channel: CHANNEL, token: capture?.token, ...payload });
   const partNumbers = text => [...text.matchAll(PART)].map(match => Number(match[1]));
   const partCount = () => partNumbers(ocrText).length || (ocrText.trim() ? 1 : 0);
@@ -197,7 +233,7 @@
   function resetUI(next) { if (ui) ui.remove(); ui = next; root.append(ui); host.style.display = "block"; }
   function hide() {
     if (capture) void ask({ type: "cancel" }).catch(() => {});
-    busy = false; jobId = null; jobBase = null; jobParts = null; host.style.display = "none";
+    busy = false; jobId = null; jobCommand = null; jobBase = null; jobParts = null; host.style.display = "none";
   }
   function close() { appending = false; hide(); }
   // Turning the page for the next part keeps the article; the next capture adds to it.
@@ -216,7 +252,7 @@
   function standby() {
     if (busy && capture) void ask({ type: "cancel" }).catch(() => {});
     if (busy) setStatus("Cancelled. Recognized text is retained.");
-    updateBusy(false); jobId = null; jobStyle = null; jobBase = null; jobParts = null; appending = false; toggleSettings(false);
+    updateBusy(false); jobId = null; jobStyle = null; jobCommand = null; jobBase = null; jobParts = null; appending = false; toggleSettings(false);
     const previous = isReader() ? ui : null;
     const bar = node("section", "standby"); bar.dataset.side = settings.toolbarSide;
     bar.setAttribute("role", "region"); bar.setAttribute("aria-label", "Magazine Reader: ready for a new capture");
@@ -254,6 +290,123 @@
     panel.setAttribute("aria-modal", String(!docked));
     for (const sync of syncers) sync();
   }
+  function saveCommands() {
+    try { void chrome.storage?.local?.set({ readerCommands: commands })?.catch?.(() => {}); } catch { /* session only */ }
+  }
+  const captureHintText = value => value.startsWith("cmd:") ? "Runs your saved command on this excerpt." : STYLES[value]?.[1] || "";
+  function fillCapturePicker(picker) {
+    picker.replaceChildren(...Object.entries(STYLES).map(([key, [name]]) => {
+      const option = node("option", "", name); option.value = key; return option;
+    }));
+    if (commands.length) {
+      const group = node("optgroup"); group.label = "Commands";
+      for (const command of commands) { const option = node("option", "", command.name); option.value = `cmd:${command.id}`; group.append(option); }
+      picker.append(group);
+    }
+    const manage = node("option", "", "Manage commands…"); manage.value = "manage"; picker.append(manage);
+  }
+  function refreshCapturePicker() {
+    if (!captureStylePicker?.isConnected) return;
+    fillCapturePicker(captureStylePicker);
+    const wanted = pendingCommand && commands.some(command => command.id === pendingCommand.id) ? `cmd:${pendingCommand.id}`
+      : settings.command && commands.some(command => command.id === settings.command) ? `cmd:${settings.command}` : settings.style;
+    captureStylePicker.value = Object.hasOwn(STYLES, wanted) || wanted.startsWith("cmd:") ? wanted : settings.style;
+    pendingCommand = captureStylePicker.value.startsWith("cmd:") ? commands.find(command => `cmd:${command.id}` === captureStylePicker.value) || null : null;
+    if (captureHint) captureHint.textContent = captureHintText(captureStylePicker.value);
+  }
+  function fillReaderPicker(picker) {
+    const placeholder = node("option", "", "Custom command…"); placeholder.value = ""; picker.replaceChildren(placeholder);
+    for (const command of commands) { const option = node("option", "", command.name); option.value = `cmd:${command.id}`; picker.append(option); }
+    const manage = node("option", "", "Manage commands…"); manage.value = "manage"; picker.append(manage);
+  }
+  function refreshReaderPicker() { if (readerCommandPicker) fillReaderPicker(readerCommandPicker); }
+  function runCommand(command) {
+    if (busy || !ocrText.trim()) return;
+    const entry = commandResults.get(command.id);
+    if (entry && entry.source === ocrText) { activeCommand = command.id; renderSummary(); updateBusy(false); setStatus(""); return; }
+    activeCommand = command.id;
+    void submit({ type: "summarize", text: ocrText, command });
+  }
+  function openCommands(previous = ui) {
+    let draft = null, error = "", confirming = null;
+    const screen = node("section", "commands");
+    screen.setAttribute("role", "dialog"); screen.setAttribute("aria-modal", "true"); screen.setAttribute("aria-label", "Custom commands");
+    const box = node("div", "commands-panel"), head = node("div", "commands-head"), body = node("div", "commands-body");
+    const returnFocus = root.activeElement;
+    const finish = () => {
+      closeCommands = null;
+      resetUI(previous);
+      if (previous?.classList.contains("reader")) { refreshReaderPicker(); renderSummary(); updateBusy(busy); }
+      else refreshCapturePicker();
+      if (returnFocus?.isConnected) returnFocus.focus({ preventScroll: true });
+    };
+    head.append(node("h2", "", "Commands"), button("Done", finish, "primary"));
+    box.append(head, body); screen.append(box);
+    const fail = message => { error = message; render(); };
+    const save = () => {
+      const name = draft.name.trim(), prompt = draft.prompt.trim();
+      if (!name) return fail("Give the command a name.");
+      if (name.length > MAX_COMMAND_NAME) return fail(`Keep the name under ${MAX_COMMAND_NAME} characters.`);
+      if (!prompt) return fail("Write the instruction DeepSeek should follow.");
+      if (prompt.length > MAX_COMMAND_PROMPT) return fail(`Keep the prompt under ${MAX_COMMAND_PROMPT.toLocaleString("en")} characters.`);
+      const tokens = Object.hasOwn(COMMAND_LENGTHS, Number(draft.tokens)) ? Number(draft.tokens) : 2000;
+      const command = { id: draft.id || crypto.randomUUID(), name, prompt, tokens };
+      const index = commands.findIndex(item => item.id === command.id);
+      if (index >= 0) commands[index] = command;
+      else if (commands.length < MAX_COMMANDS) commands.push(command);
+      saveCommands(); draft = null; error = ""; render();
+    };
+    const remove = id => {
+      const index = commands.findIndex(item => item.id === id);
+      if (index >= 0) commands.splice(index, 1);
+      if (settings.command === id) saveSettings({ command: "" });
+      if (activeCommand === id) activeCommand = null;
+      commandResults.delete(id);
+      confirming = null; saveCommands(); render();
+    };
+    const renderForm = () => {
+      const form = node("form", "command-form"), name = node("input", "command-name"), prompt = node("textarea", "command-prompt"), tokens = node("select", "command-tokens");
+      name.type = "text"; name.maxLength = MAX_COMMAND_NAME; name.value = draft.name; name.setAttribute("aria-label", "Name");
+      prompt.maxLength = MAX_COMMAND_PROMPT; prompt.value = draft.prompt; prompt.setAttribute("aria-label", "Prompt");
+      for (const [value, label] of Object.entries(COMMAND_LENGTHS)) { const option = node("option", "", label); option.value = value; tokens.append(option); }
+      tokens.value = String(draft.tokens); tokens.setAttribute("aria-label", "Output length");
+      name.addEventListener("input", () => { draft.name = name.value; });
+      prompt.addEventListener("input", () => { draft.prompt = prompt.value; });
+      tokens.addEventListener("change", () => { draft.tokens = Number(tokens.value); });
+      form.addEventListener("submit", event => { event.preventDefault(); save(); });
+      const nameField = node("label", "", "Name"); nameField.append(name);
+      const promptField = node("label", "", "Prompt"); promptField.append(prompt);
+      const lengthField = node("label", "", "Output length"); lengthField.append(tokens);
+      form.append(nameField, promptField, lengthField);
+      if (error) { const alert = node("div", "command-error", error); alert.setAttribute("role", "alert"); form.append(alert); }
+      const actions = node("div", "actions");
+      actions.append(button(draft.id ? "Save command" : "Add command", save, "primary"),
+        button("Cancel", () => { draft = null; error = ""; render(); }));
+      form.append(actions);
+      queueMicrotask(() => name.focus({ preventScroll: true }));
+      return form;
+    };
+    const render = () => {
+      body.replaceChildren();
+      if (draft) { body.append(renderForm()); return; }
+      const add = button("Add command", () => { draft = { name: "", prompt: "", tokens: 2000 }; error = ""; render(); });
+      add.disabled = commands.length >= MAX_COMMANDS; if (add.disabled) add.title = `Up to ${MAX_COMMANDS} commands.`;
+      body.append(add);
+      if (!commands.length) { body.append(node("p", "command-empty", "No commands yet. Add one to run your own instruction on a captured article.")); return; }
+      for (const command of commands) {
+        const row = node("div", "command-row"), info = node("div", "command-info"), actions = node("div", "actions");
+        info.append(node("div", "name", command.name), node("div", "prompt", command.prompt));
+        if (confirming === command.id) actions.append(node("span", "command-error", "Delete this command?"),
+          button("Delete", () => remove(command.id), "primary"), button("Keep", () => { confirming = null; render(); }));
+        else actions.append(button("Edit", () => { draft = { ...command }; error = ""; render(); }),
+          button("Delete", () => { confirming = command.id; render(); }));
+        row.append(info, actions); body.append(row);
+      }
+    };
+    closeCommands = finish;
+    render(); resetUI(screen);
+    screen.querySelector("button")?.focus({ preventScroll: true });
+  }
   function segmented(label, key, options, render) {
     const group = node("div", "setting"), row = node("div", "segmented");
     row.setAttribute("role", "radiogroup"); row.setAttribute("aria-label", label);
@@ -280,7 +433,10 @@
       segmented("Alignment", "align", { left: "Ragged", justify: "Justified" }));
     const foot = node("div", "settings-foot"), keys = node("span");
     for (const [key, text] of [["+", " / "], ["−", " size · "], ["1", "–"], [String(Object.keys(TABS).length), " tab · "], ["Esc", " close"]]) keys.append(node("kbd", "", key), text);
-    foot.append(keys, button("Reset reading settings", () => saveSettings({ ...DEFAULTS, style: settings.style, toolbarSide: settings.toolbarSide }), "link"));
+    const footActions = node("span"); footActions.style.cssText = "display:flex;gap:10px;align-items:center";
+    footActions.append(button("Commands…", () => openCommands(ui), "link"),
+      button("Reset reading settings", () => saveSettings({ ...DEFAULTS, style: settings.style, toolbarSide: settings.toolbarSide }), "link"));
+    foot.append(keys, footActions);
     sheet.append(foot); return sheet;
   }
   function toggleSettings(open = !settingsOpen) {
@@ -304,11 +460,12 @@
   }
   function updateBusy(value) {
     busy = value;
-    const asking = activeStyle === "ask", entry = current(), fresh = entry && entry.source === ocrText;
+    const asking = !activeCommand && activeStyle === "ask", entry = currentEntry(), fresh = entry && entry.source === ocrText;
+    const command = activeCommand ? commands.find(item => item.id === activeCommand) : null;
     if (summarizeButton) {
       summarizeButton.disabled = value || !ocrText.trim(); summarizeButton.hidden = asking || (value && !ocrText.trim());
-      summarizeButton.textContent = fresh ? "Regenerate" : activeStyle === "translation" ? "Translate" : "Summarize";
-      summarizeButton.title = fresh ? `Ask DeepSeek for a new ${STYLES[activeStyle][0].toLowerCase()} version` : "";
+      summarizeButton.textContent = fresh ? "Regenerate" : command ? "Run" : activeStyle === "translation" ? "Translate" : "Summarize";
+      summarizeButton.title = fresh ? `Ask DeepSeek for a new ${(command ? command.name : STYLES[activeStyle]?.[0] || "summary").toLowerCase()} version` : "";
     }
     const copyable = asking ? thread.some(turn => turn.answer) : Boolean(entry);
     if (copyButton) { copyButton.disabled = !copyable; copyButton.hidden = !copyable || value; copyButton.title = asking ? "Copy the conversation" : "Copy without the limitations note"; }
@@ -331,10 +488,14 @@
       for (const chip of suggestionsNode.children) chip.disabled = value;
       clearButton.hidden = !thread.length || value;
     }
+    if (readerCommandPicker) {
+      readerCommandPicker.disabled = value;
+      if (!value) readerCommandPicker.value = command ? `cmd:${command.id}` : "";
+    }
     for (const tab of tabButtons) {
-      const key = tab.dataset.style;
-      tab.disabled = value; tab.setAttribute("aria-selected", String(key === activeStyle));
-      tab.classList.toggle("cached", summaries.has(key) && key !== activeStyle);
+      const key = tab.dataset.style, shown = !activeCommand && key === activeStyle;
+      tab.disabled = value; tab.setAttribute("aria-selected", String(shown));
+      tab.classList.toggle("cached", summaries.has(key) && !shown);
     }
   }
   const appendInline = (target, value) => {
@@ -398,8 +559,19 @@
   }
   function renderSummary() {
     if (!summaryNode) return;
+    if (activeCommand) {
+      const entry = currentEntry(), text = entry?.text || "";
+      summaryNode.replaceChildren();
+      renderBlocks(summaryNode, text);
+      const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+      readingLabel.hidden = !text;
+      readingLabel.replaceChildren(node("span", "", commands.find(item => item.id === activeCommand)?.name || entry?.name || "Command"),
+        entry && entry.source !== ocrText ? node("span", "", "Japanese text edited since") : node("span", "", `${words} words`));
+      summaryNode.parentElement.scrollTop = 0;
+      return;
+    }
     if (activeStyle === "ask") { summaryNode.replaceChildren(); renderThread(); return; }
-    const entry = current(), text = entry?.text || "";
+    const entry = currentEntry(), text = entry?.text || "";
     summaryNode.replaceChildren();
     renderBlocks(summaryNode, text, { stocks: activeStyle === "stocks", vocabulary: activeStyle === "glossary", kotoba: activeStyle === "glossary" });
     const words = text.trim() ? text.trim().split(/\s+/).length : 0;
@@ -648,6 +820,7 @@
   }
   function chooseStyle(key) {
     if (busy) return;
+    activeCommand = null;
     if (key === "ask") {
       activeStyle = "ask"; renderSummary(); updateBusy(false); setStatus("");
       askInput.focus({ preventScroll: true }); return;
@@ -662,10 +835,11 @@
     const id = crypto.randomUUID();
     updateArchive(null);
     jobBase = base; jobParts = added;
-    jobId = id; jobStyle = payload.type === "ask" ? "ask" : payload.mode === "ocr" ? null : payload.style; updateBusy(true);
+    jobId = id; jobCommand = payload.command || null;
+    jobStyle = payload.type === "ask" ? "ask" : payload.command ? null : payload.mode === "ocr" ? null : payload.style; updateBusy(true);
     if (copyButton) copyButton.textContent = "Copy";
     setStatus(payload.type === "capture" ? "Reading Japanese text locally…" : payload.type === "ask" ? ""
-      : `Creating ${STYLES[payload.style][2].toLowerCase()} with DeepSeek…`);
+      : payload.command ? `Running ${payload.command.name} with DeepSeek…` : `Creating ${STYLES[payload.style][2].toLowerCase()} with DeepSeek…`);
     try {
       const response = await ask({ parts: added ? [...parts, ...added] : parts, ...payload, id });
       if (!response?.ok) throw new Error(response?.error || "The extension did not respond.");
@@ -740,10 +914,17 @@
     }
     panel.append(body);
     const actions = node("div", "actions");
-    summarizeButton = button("Summarize", () => { ocrText = textArea.value; void submit({ type: "summarize", text: ocrText, style: activeStyle }); }, "primary");
+    summarizeButton = button("Summarize", () => {
+      ocrText = textArea.value;
+      const command = activeCommand ? commands.find(item => item.id === activeCommand) : null;
+      if (command) void submit({ type: "summarize", text: ocrText, command });
+      else void submit({ type: "summarize", text: ocrText, style: activeStyle });
+    }, "primary");
     copyButton = button("Copy", async event => {
-      const entry = current();
-      const text = activeStyle === "ask"
+      const entry = currentEntry();
+      const text = activeCommand
+        ? entry && globalThis.magazineSummary.copyText(entry.text)
+        : activeStyle === "ask"
         ? thread.filter(turn => turn.answer).map(turn => `Q: ${turn.question}\n\n${turn.answer}`).join("\n\n---\n\n")
         : entry && globalThis.magazineSummary.copyText(entry.text).split("\n").map(line => {
           // Copy vocabulary as "語句 (reading) — meaning" rather than the pipe format.
@@ -758,11 +939,20 @@
     });
     cancelButton = button("Cancel", () => {
       void ask({ type: "cancel" }).catch(() => {});
-      const asking = jobStyle === "ask"; jobId = null; jobStyle = null; jobBase = null; jobParts = null; updateBusy(false);
+      const asking = jobStyle === "ask"; jobId = null; jobStyle = null; jobCommand = null; jobBase = null; jobParts = null; updateBusy(false);
       if (asking) failQuestion("Cancelled."); else setStatus("Cancelled. Recognized text is retained.");
     });
     addPartButton = button("+ Add part", addPart);
-    actions.append(button("New capture", standby), addPartButton, node("span", "spacer"), cancelButton, copyButton, summarizeButton);
+    readerCommandPicker = node("select", "command-picker");
+    readerCommandPicker.setAttribute("aria-label", "Custom command");
+    fillReaderPicker(readerCommandPicker);
+    readerCommandPicker.addEventListener("change", () => {
+      const value = readerCommandPicker.value;
+      if (value === "manage") { openCommands(ui); return; }
+      const command = value.startsWith("cmd:") ? commands.find(item => `cmd:${item.id}` === value) : null;
+      if (command) runCommand(command); else readerCommandPicker.value = activeCommand ? `cmd:${activeCommand}` : "";
+    });
+    actions.append(button("New capture", standby), addPartButton, node("span", "spacer"), cancelButton, copyButton, readerCommandPicker, summarizeButton);
     archiveNode = node("span", "archive-status"); archiveNode.setAttribute("role", "status"); updateArchive(archiveInfo);
     const footnote = node("div", "footnote"); footnote.append(archiveNode, node("span", "", "Summaries and questions send text to DeepSeek. Images stay on this Mac."));
     const bottom = node("div", "panel-bottom"); bottom.append(actions, footnote); panel.append(bottom);
@@ -786,14 +976,22 @@
     toolbar.append(node("h2", "", adding ? `Add part ${first} to the article` : "Select a page or article"), sideSwitch,
       node("div", "muted", "Drag a rectangle around the Japanese text. For columns or boxes, draw several: they are read in the order you draw them. Zoom the reader before capturing if the type is small."));
     if (!adding) {
+      pendingCommand = null;
       const label = node("label", "", "Summary style"), picker = node("select"), hint = node("div", "muted");
-      for (const [key, [name]] of Object.entries(STYLES)) {
-        const option = node("option", "", name); option.value = key; picker.append(option);
-      }
-      const pick = () => { hint.textContent = STYLES[picker.value][1]; };
-      picker.value = settings.style; pick();
-      picker.addEventListener("change", () => { saveSettings({ style: picker.value }); pick(); });
-      label.append(picker); toolbar.append(label, hint);
+      captureStylePicker = picker; captureHint = hint;
+      fillCapturePicker(picker);
+      const wanted = settings.command && commands.some(command => command.id === settings.command) ? `cmd:${settings.command}` : settings.style;
+      picker.value = wanted;
+      pendingCommand = picker.value.startsWith("cmd:") ? commands.find(command => `cmd:${command.id}` === picker.value) || null : null;
+      hint.textContent = captureHintText(picker.value);
+      picker.addEventListener("change", () => {
+        if (picker.value === "manage") { openCommands(ui); return; }
+        const command = picker.value.startsWith("cmd:") ? commands.find(item => `cmd:${item.id}` === picker.value) || null : null;
+        pendingCommand = command;
+        saveSettings(command ? { command: command.id } : { style: picker.value, command: "" });
+        hint.textContent = captureHintText(picker.value);
+      });
+      label.append(picker); toolbar.append(label, hint, button("Commands…", () => openCommands(ui), "manage-commands"));
       hint.style.marginTop = "5px";
     }
     const actions = node("div", "actions");
@@ -811,10 +1009,11 @@
         const added = images.map((_, index) => ({ part: first + index, capturedAt: capture.capturedAt }));
         // The first part gets its own heading once a second one joins it.
         const base = adding && ocrText.trim() ? (partNumbers(ocrText).length ? ocrText.trim() : `${partMarker(1)}\n${ocrText.trim()}`) : null;
-        if (!adding) { ocrText = ""; summaries.clear(); thread.length = 0; vocab.clear(); crops = []; parts = []; activeStyle = settings.style; }
+        const command = !adding && mode === "summary" && pendingCommand ? pendingCommand : null;
+        if (!adding) { ocrText = ""; summaries.clear(); commandResults.clear(); thread.length = 0; vocab.clear(); crops = []; parts = []; activeStyle = settings.style; activeCommand = null; }
         crops.push(...images); appending = false;
         showPanel();
-        await submit({ type: "capture", images, firstPart: first, mode: adding ? "ocr" : mode, style: activeStyle }, { base, added });
+        await submit({ type: "capture", images, firstPart: first, mode: adding ? "ocr" : mode, ...(command ? { command } : { style: activeStyle }) }, { base, added });
       } catch (error) { showPanel(); updateBusy(false); setStatus(error.message, true); }
     };
     const summarize = button("Summarize selection", () => void process("summary"), "primary");
@@ -875,10 +1074,10 @@
       await settingsReady;
       // While adding a part, the article so far (text, results, conversation) carries over to this capture.
       if (!appending || !ocrText.trim()) {
-        appending = false; ocrText = ""; summaries.clear(); thread.length = 0; vocab.clear(); crops = []; parts = []; archiveInfo = null;
-        activeStyle = settings.style; settingsOpen = false;
+        appending = false; ocrText = ""; summaries.clear(); commandResults.clear(); thread.length = 0; vocab.clear(); crops = []; parts = []; archiveInfo = null;
+        activeStyle = settings.style; activeCommand = null; pendingCommand = null; settingsOpen = false;
       }
-      capture = message; regions = []; jobId = null; jobStyle = null; jobBase = null; jobParts = null; busy = false;
+      capture = message; regions = []; jobId = null; jobStyle = null; jobCommand = null; jobBase = null; jobParts = null; busy = false;
       image = new Image(); image.src = capture.image; await image.decode(); selectionUI(); return { ok: true };
     }
     if (message.type === "error") { await settingsReady; showPanel(); updateBusy(false); setStatus(message.error, true); return { ok: true }; }
@@ -888,10 +1087,11 @@
     if (message.stage === "recognized" && jobParts) { parts.push(...jobParts); jobParts = null; }
     if (message.stage === "recognizing") setStatus(message.boxes > 1 ? `Reading Japanese text locally… box ${message.box} of ${message.boxes}` : "Reading Japanese text locally…");
     if (message.stage === "recognized") setStatus("Japanese text recognized.");
-    if (message.stage === "summarizing" && jobStyle && jobStyle !== "ask") setStatus(`Creating ${STYLES[jobStyle][2].toLowerCase()} with DeepSeek…`);
+    if (message.stage === "summarizing" && jobCommand) setStatus(`Running ${jobCommand.name} with DeepSeek…`);
+    else if (message.stage === "summarizing" && jobStyle && jobStyle !== "ask") setStatus(`Creating ${STYLES[jobStyle][2].toLowerCase()} with DeepSeek…`);
     if (message.done) {
-      const style = jobStyle, added = jobParts, appended = jobBase !== null;
-      jobId = null; jobStyle = null; jobBase = null; jobParts = null;
+      const style = jobStyle, command = jobCommand, added = jobParts, appended = jobBase !== null;
+      jobId = null; jobStyle = null; jobCommand = null; jobBase = null; jobParts = null;
       // Boxes whose text never arrived are not part of the article.
       if (added) { if (message.ok && typeof message.text === "string") parts.push(...added); else crops.splice(-added.length); }
       if (style === "ask") {
@@ -901,13 +1101,17 @@
         return { ok: true };
       }
       if (!message.ok) { updateBusy(false); setStatus(message.error || "Processing failed.", true); return { ok: true }; }
-      if (message.summary && style) {
+      if (message.summary && command) {
+        commandResults.set(command.id, { text: message.summary, source: ocrText, truncated: Boolean(message.truncated), name: command.name });
+        activeCommand = command.id; updateBusy(false); renderSummary();
+        setStatus(message.truncated ? "This reached the output limit. Select a smaller excerpt or a command with a shorter output." : "");
+      } else if (message.summary && style) {
         summaries.set(style, { text: message.summary, source: ocrText, truncated: Boolean(message.truncated) });
         activeStyle = style; updateBusy(false); renderSummary();
         setStatus(message.truncated ? "This reached the output limit. Select a smaller excerpt or a shorter style." : "");
       } else if (appended) {
         // Results for the shorter text are kept in data/, but no longer describe the article.
-        summaries.clear(); vocab.clear(); renderSummary(); updateBusy(false);
+        summaries.clear(); commandResults.clear(); vocab.clear(); activeCommand = null; renderSummary(); updateBusy(false);
         setStatus(ocrText.length > MAX_TEXT
           ? `The article is now over ${MAX_TEXT.toLocaleString("en")} characters, too long to send. Remove some text below.`
           : `Added. The article now has ${partCount()} parts. Add another, or pick a style above to read the whole article.`, ocrText.length > MAX_TEXT);
@@ -935,11 +1139,12 @@
   document.addEventListener("keydown", event => {
     if (host.style.display === "none" || event.isComposing) return;
     if (event.key === "Escape") {
-      if (isReader() && settingsOpen) toggleSettings(false);
+      if (closeCommands) closeCommands();
+      else if (isReader() && settingsOpen) toggleSettings(false);
       else if (ui?.className === "selection" && appending) backToArticle(); else close();
       event.stopPropagation(); return;
     }
-    const modal = ui?.className === "selection" || (isReader() && settings.layout === "center");
+    const modal = ui?.className === "selection" || ui?.classList.contains("commands") || (isReader() && settings.layout === "center");
     if (event.key === "Tab") { if (modal) trapFocus(event); return; }
     // Docked reading leaves the page usable; only shortcuts typed while focus is in the panel are ours.
     if (!isReader() || (!modal && !root.activeElement) || event.metaKey || event.ctrlKey || event.altKey) return;
@@ -952,5 +1157,8 @@
     event.preventDefault(); event.stopPropagation();
   }, true);
   // The screenshot no longer matches the page; an article being collected goes back to the reader.
-  window.addEventListener("resize", () => { if (ui?.className === "selection") { if (appending) backToArticle(); else close(); } });
+  window.addEventListener("resize", () => {
+    if (ui?.classList.contains("commands") && closeCommands) closeCommands();
+    if (ui?.className === "selection") { if (appending) backToArticle(); else close(); }
+  });
 })();

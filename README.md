@@ -100,7 +100,7 @@ The host looks for a key in this order and uses the first it finds:
    text is comfortably readable. Exit the reader's fullscreen mode first.
 2. Click the **Magazine Reader** toolbar button. The page freezes into a screenshot
    with a control bar at the side (**Move to left/right** switches sides). Choose a
-   **Summary style** there.
+   **Summary style** there, or one of your own **Commands**.
 3. Drag a rectangle around a page, article, or text column, or click **Whole viewport**.
    For columns, sidebars or boxes, draw several rectangles: they are numbered and read in
    the order you draw them (up to 12). **Undo box** removes the last one.
@@ -123,6 +123,16 @@ The host looks for a key in this order and uses the first it finds:
    A tab you haven't generated yet sends the same text again in that style; results
    are kept for the capture (marked with a dot) and switch instantly.
    **Regenerate** asks for a fresh version.
+
+**Commands** — your own instructions, run against the captured Japanese text the same
+way the built-in styles are. Open the reader's **Aa** reading settings and click
+**Commands…** (or use **Commands…** on the capture bar, or **Manage commands…** in the
+reader's command menu), then **Add command**: give it a name, the instruction DeepSeek
+should follow, and an output length (short, standard, or long). A command joins the
+capture bar's **Summary style** menu and the **Custom command…** menu beside
+**Summarize**. Running one shows its output under the command's name, and **Run** sends
+the same text again. Commands live in Chrome's extension storage, and each saved result
+records the command name. Up to 40.
 6. To turn the page, click **New capture**. The overlay shrinks to a small bar so you
    can use the magazine normally; click **Capture page** when you're on the page you
    want, or **Back** to return to the last result.
@@ -184,15 +194,16 @@ Every request is saved automatically in this repository's `data/` folder
 - `ocr.txt` — the Japanese text that was used, including your edits.
 - `summary.md` — the English output; for **Ask**, the question and answer.
 - `metadata.json` — page URL, capture time and ID, output style (`ask` for
-  questions), model, whether the output was cut off, and, for an article in several
-  parts, when each part was captured (`parts`).
+  questions, null for a command), the command that produced it (`command`), model,
+  whether the output was cut off, and, for an article in several parts, when each part
+  was captured (`parts`).
 
 **Library** — browse everything saved here without opening the files: click **Library** in the
 reader's header, or right-click the toolbar button and choose **Options**. Captures are listed
 newest first, grouped by day, and the search box looks through both the Japanese text and the
-English output. Opening one shows each style it was summarized in as a tab (with older versions of
-a regenerated style one click away), Ask questions as a conversation, and the Japanese text that
-was used. It reads `data/` through the native host, read-only, and sends nothing anywhere. Keys:
+English output. Opening one shows each style or command it was summarized in as a tab (with older
+versions of a regenerated style one click away), Ask questions as a conversation, and the Japanese
+text that was used. It reads `data/` through the native host, read-only, and sends nothing anywhere. Keys:
 `/` search, `j` / `k` next and previous capture.
 
 The text is saved **before** DeepSeek is called, so it survives failed or cancelled

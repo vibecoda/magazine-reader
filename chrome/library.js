@@ -24,7 +24,9 @@
   };
   const day = iso => iso ? new Date(iso).toLocaleDateString([], { weekday: "short", year: "numeric", month: "short", day: "numeric" }) : "Undated";
   const time = iso => iso ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
-  const styleOf = entry => entry.style || "ocr";
+  const styleOf = entry => entry.command ? `command:${entry.command.id}` : entry.style || "ocr";
+  const commandLabel = entries => entries.find(entry => entry.command)?.command?.name || "Command";
+  const labelOf = (key, entries = []) => STYLES[key]?.[0] || commandLabel(entries);
 
   function host(payload) {
     return new Promise((resolve, reject) => chrome.runtime.sendNativeMessage(HOST, { id: crypto.randomUUID(), type: "library", ...payload }, reply => {
@@ -121,7 +123,9 @@
       const snippet = node("span", "item-snippet", capture.snippet); snippet.lang = "ja";
       item.append(node("span", "item-title", capture.title || capture.snippet.slice(0, 40) || "Untitled capture"), snippet);
       const meta = node("span", "item-meta"); meta.append(time(capture.capturedAt));
-      for (const style of [...new Set(capture.entries.map(styleOf))]) meta.append(node("span", "pill", STYLES[style]?.[0] || style));
+      const pills = new Map();
+      for (const entry of capture.entries) { const key = styleOf(entry); if (!pills.has(key)) pills.set(key, labelOf(key, [entry])); }
+      for (const label of pills.values()) meta.append(node("span", "pill", label));
       item.append(meta); list.append(item);
     }
   }
@@ -172,7 +176,9 @@
       byStyle.get(key).push(entry);
     }
     if (!byStyle.size && data.entries.length) byStyle.set("ocr", data.entries);
-    const keys = Object.keys(STYLES).filter(key => byStyle.has(key));
+    const keys = [...Object.keys(STYLES).filter(key => byStyle.has(key)),
+      ...[...byStyle.keys()].filter(key => key.startsWith("command:"))];
+    const labels = new Map(keys.map(key => [key, labelOf(key, byStyle.get(key) || [])]));
     const active = byStyle.has(style) ? style : keys[0];
     const out = [];
     const meta = node("div", "meta");
@@ -183,7 +189,7 @@
     const tabs = node("div", "tabs"); tabs.setAttribute("role", "tablist");
     for (const key of keys) {
       const versions = byStyle.get(key).length;
-      const tab = button(versions > 1 && key !== "ask" ? `${STYLES[key][0]} ·${versions}` : STYLES[key][0], () => { selected.style = key; renderCapture(); }, "tab");
+      const tab = button(versions > 1 && key !== "ask" ? `${labels.get(key)} ·${versions}` : labels.get(key), () => { selected.style = key; renderCapture(); }, "tab");
       tab.setAttribute("role", "tab"); tab.setAttribute("aria-selected", String(key === active));
       if (versions > 1 && key !== "ask") tab.title = `${versions} saved versions`;
       tabs.append(tab);
@@ -221,7 +227,7 @@
     }
     const words = text.trim() ? text.trim().split(/\s+/).length : 0;
     const label = node("div", "reading-label");
-    label.append(node("span", "", STYLES[active]?.[1] || ""), node("span", "",
+    label.append(node("span", "", STYLES[active]?.[1] || labels.get(active) || "Command"), node("span", "",
       active === "ask" ? `${entries.length} answered` : active === "ocr" ? `${text.replace(/\s/g, "").length} characters`
         : body.querySelector(".vocab") ? `${body.querySelectorAll(".vocab>li").length} terms` : `${words} words`));
     out.push(label, body);
